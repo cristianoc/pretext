@@ -1360,7 +1360,7 @@ describe('the library through the adapter', () => {
     const c = paragraph('one\ntwo\nthree', 400)
     c.paragraph.whiteSpace = 'pre-wrap'
     expect(disagreement(adapter.predict(c))).toBeNull()
-    const fast = await planted('prepare-options', 'layout.ts', /return prepareInternal\(text, font, false, options\)/, 'return prepareInternal(text, font, false)')
+    const fast = await planted('prepare-options', 'layout.ts', /return prepareInternal\(text, font, null, options\)/, 'return prepareInternal(text, font, null)')
     expect(disagreement(fast.predict(c))).toStartWith('layout() gives 1 lines')
   })
 })

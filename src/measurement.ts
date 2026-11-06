@@ -1,3 +1,4 @@
+import { missing } from './checked.js'
 import { findGraphemeEnds, type GraphemeTable } from './graphemes.js'
 import { DEFAULT_IGNORABLE, getBlinkDefaultLocale, hasProperty, MARK } from './line-breaks.js'
 import { webkitGenericFamilies, webkitGenericFamilyNames, webkitScriptLanguages, webkitScriptSubtags } from './generated/webkit-generic-families.js'
@@ -474,8 +475,6 @@ const emojiGraphemeRe = /\p{Emoji_Presentation}|\p{Extended_Pictographic}|\p{Emo
 const maybeEmojiRe = /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u20E3]/u
 
 const genericKeywords = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace']
-// A quoted family name, or an unquoted generic keyword with what precedes it.
-const familyListItemRe = /("[^"]*"|'[^']*')|(^|,)(\s*)(serif|sans-serif|cursive|fantasy|monospace)(?=\s*(?:,|$))/gi
 // A font string's size, with its line height, after which its family list starts.
 const fontSizeRe = /\dpx(?:\s*\/\s*\S+)?\s+/
 // One family of a family list, with the white space around it.
@@ -491,6 +490,8 @@ const familyRe = /(?:"[^"]*"|'[^']*'|[^,])+/g
 // and iOS's families (scripts/generate-webkit-generic-families.ts): where they differ,
 // the context takes macOS's if it has it. Listing both instead would send characters
 // macOS's family lacks to iOS's, where the page falls back by language.
+const webkitGenericFamilyTable: ReadonlyMap<string, readonly number[]> = new Map(Object.entries(webkitGenericFamilies))
+
 function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): string[] | null {
   let tag = language.toLowerCase().replaceAll('_', '-')
   let han: boolean | null = null
@@ -504,20 +505,21 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
     }
   }
   if (han) tag = 'zh-hans'
-  let row = webkitGenericFamilies[tag]
+  let row = webkitGenericFamilyTable.get(tag)
   while (row === undefined) {
     tag = tag.slice(0, Math.max(0, tag.lastIndexOf('-')))
-    row = webkitGenericFamilies[tag]
+    row = webkitGenericFamilyTable.get(tag)
   }
   const families: string[] = []
   for (let i = 0; i < row.length; i++) {
     // Keywords with the same entry share its family, and the context is asked once.
-    const first = row.indexOf(row[i]!)
+    const first = row.indexOf(row[i] ?? missing())
     if (first < i) {
-      families.push(families[first]!)
+      families.push(families[first] ?? missing())
       continue
     }
-    const name = webkitGenericFamilyNames[row[i]!]!
+    const name = webkitGenericFamilyNames[(row[i] ?? missing())]
+    if (name === undefined) throw new RangeError('missing value')
     const pair = name.indexOf('|')
     const family = pair < 0 ? name : hasFamily(ctx, name.slice(0, pair)) ? name.slice(0, pair) : name.slice(pair + 1)
     families.push(family === '' ? '' : `"${family}"`)
@@ -546,8 +548,11 @@ function getCanvasFont(font: string, families: readonly string[]): string {
   const size = fontSizeRe.exec(font)
   if (size === null) return font
   const start = size.index + size[0].length
-  return font.slice(0, start) + font.slice(start).replace(familyListItemRe, (item: string, quoted: string | undefined, separator: string, space: string, keyword: string) => {
-    const named = quoted === undefined ? families[genericKeywords.indexOf(keyword.toLowerCase())]! : ''
+  // A quoted family name, or an unquoted generic keyword with what precedes it.
+  return font.slice(0, start) + font.slice(start).replace(/("[^"]*"|'[^']*')|(^|,)(\s*)(serif|sans-serif|cursive|fantasy|monospace)(?=\s*(?:,|$))/gi, (item: string, quoted: string | undefined, separator: string | undefined, space: string | undefined, keyword: string | undefined) => {
+    if (quoted !== undefined || separator === undefined || space === undefined || keyword === undefined) return item
+    const named = families[genericKeywords.indexOf(keyword.toLowerCase())]
+    if (named === undefined) throw new RangeError('missing value')
     return named === '' ? item : separator + space + named
   })
 }
@@ -582,9 +587,9 @@ export function getHyphenText(measurement: FontMeasurement): string {
     const monospace = prefix + 'monospace'
     const serif = prefix + 'serif'
     if (measureIn(context, monospace, ' ') !== measureIn(context, serif, ' ') && measureIn(context, monospace, '\u2010') !== measureIn(context, serif, '\u2010')) {
-      for (let i = 0; i < families.length; i++) {
-        const beforeMonospace = `${prefix}${families[i]}, monospace`
-        const beforeSerif = `${prefix}${families[i]}, serif`
+      for (const family of families) {
+        const beforeMonospace = `${prefix}${family}, monospace`
+        const beforeSerif = `${prefix}${family}, serif`
         if (measureIn(context, beforeMonospace, ' ') !== measureIn(context, beforeSerif, ' ')) continue
         if (measureIn(context, beforeMonospace, '\u2010') === measureIn(context, beforeSerif, '\u2010')) hyphenText = '\u2010'
         break
@@ -620,7 +625,7 @@ export function getPreparationLanguage(profile: EngineProfile): string | null {
   if (measureState !== null && measureState.segments > MAX_CACHED_SEGMENTS) clearMeasurementCaches()
   let language = localeLanguage ?? null
   if (localeLanguage === undefined && typeof document !== 'undefined') {
-    const lang = (document.documentElement as HTMLElement | null | undefined)?.lang
+    const lang = document.documentElement?.lang
     if (typeof lang === 'string') language = lang
   }
   return language === '' && profile.laysOutUnderDefaultLocale ? getBlinkDefaultLocale() : language
@@ -685,7 +690,8 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
   let extras = noExtraSpacings
   try {
     let before = 0
-    for (let i = 0, start = 0; i < count; start = ends[i++]!) {
+    for (let i = 0; i < count; i++) {
+      const start = i === 0 ? 0 : (ends[i - 1] ?? missing())
       const text = seg.slice(prefixes ? 0 : start, ends[i])
       let glyphs = counts.get(text)
       if (glyphs === undefined) {
@@ -700,7 +706,9 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
       before = glyphs
       if (extra === 0 && extras.length === 0) continue
       if (extras.length === 0) extras = zeros(count)
-      extras[i] = extra
+      const extrasStore = extras
+      if ((i & 0x7fffffff) !== i || i > extrasStore.length) throw new RangeError('index')
+      extrasStore[i] = extra
     }
   } finally {
     if (context !== null) context.letterSpacing = measurement.letterSpacing
@@ -735,7 +743,7 @@ function addMetrics(cache: Map<string, SegmentMetrics>, seg: string, text: strin
 // A character of the Hiragana and Katakana blocks, U+3041 to U+30FF, two of them in a row, and
 // how many the blocks hold.
 const kanaRe = /[\u3041-\u30FF]/
-export const kanaPairRe = /[\u3041-\u30FF]{2}/
+export const kanaPairRe: RegExp = /[\u3041-\u30FF]{2}/
 const KANA_COUNT = 0x30ff - 0x3041 + 1
 
 // The kerning of every segment that takes none.
@@ -875,8 +883,9 @@ function sameInk(a: TextMetrics, b: TextMetrics): boolean {
 // (RESEARCH.md, Kerning At Line Edges, has the fonts measured), and one of its hiragana with
 // U+3002 (ENGINE_FOLLOWUPS.md, Kerning between kana).
 export function getFontKanaKerning(measurement: FontMeasurement): Float64Array | null {
-  if (measurement.kanaKerning === undefined) {
-    measurement.kanaKerning = null
+  let kerning = measurement.kanaKerning
+  if (kerning === undefined) {
+    kerning = measurement.kanaKerning = null
     const font = measurement.canvasFont
     const size = fontSizeRe.exec(font)
     const start = size === null ? 0 : size.index + size[0].length
@@ -884,7 +893,7 @@ export function getFontKanaKerning(measurement: FontMeasurement): Float64Array |
     const lists = families === null ? 1 : families.length
     let own: TextMetrics | null = null
     for (let i = 0; i < lists; i++) {
-      const list = i === 0 ? font : font.slice(0, start) + families!.slice(i).join(',')
+      const list = i === 0 ? font : font.slice(0, start) + (families ?? missing()).slice(i).join(',')
       measurement.kanaFont = list
       const context = getWholeRunContext(measurement)
       const kerned = context.measureText(KANA_PROBE).width
@@ -908,12 +917,12 @@ export function getFontKanaKerning(measurement: FontMeasurement): Float64Array |
         if (ownKerned === ownUnkerned || Math.abs(shorter - ownKerned) > ownKerned / 0x400000) break
         measurement.kanaFont = list
       }
-      measurement.kanaKerning = new Float64Array(KANA_COUNT * KANA_COUNT).fill(NaN)
+      kerning = measurement.kanaKerning = new Float64Array(KANA_COUNT * KANA_COUNT).fill(NaN)
       break
     }
-    if (measurement.kanaKerning === null) measurement.kanaFont = font
+    if (kerning === null) measurement.kanaFont = font
   }
-  return measurement.kanaKerning
+  return kerning
 }
 
 // The kerning Blink's layout gives text[at - 1] and text[at] that no measured width holds, or
@@ -943,7 +952,8 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
     if (code >= 0x2e80 && !isCanvasWordLetter(code)) return 0
   }
   const index = (first - 0x3041) * KANA_COUNT + second - 0x3041
-  const kerning = kernings[index]!
+  const kerning = kernings[index]
+  if (kerning === undefined) throw new RangeError('missing value')
   return Number.isNaN(kerning) ? kernings[index] = measureKanaKerning(text.slice(at - 1, at + 1), measurement) : kerning
 }
 
@@ -951,7 +961,7 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
 // whole, less each alone.
 function measureKanaKerning(pair: string, measurement: FontMeasurement): number {
   const pairWidth = getWholeRunContext(measurement).measureText(pair).width
-  const kerning = pairWidth - getSegmentMetrics(pair[0]!, measurement).width - getSegmentMetrics(pair[1]!, measurement).width
+  const kerning = pairWidth - getSegmentMetrics(pair[0] ?? missing(), measurement).width - getSegmentMetrics(pair[1] ?? missing(), measurement).width
   // As for a character and a space, up to the pair's width / 2^22 is rounding.
   return Math.abs(kerning) <= pairWidth / 0x400000 ? 0 : kerning
 }
@@ -993,7 +1003,7 @@ export function getEngineProfile(): EngineProfile {
 function buildEngineProfile(): EngineProfile {
   // A navigator can lack a userAgent, as React Native's does, where lib.dom's type says it is a
   // string: such a runtime names no engine, like one with no navigator.
-  const ua = typeof navigator === 'undefined' ? '' : (navigator as { userAgent?: string }).userAgent ?? ''
+  const ua = typeof navigator === 'undefined' ? '' : (navigator as { readonly userAgent?: string }).userAgent ?? ''
   // Engines Pretext doesn't recognize take Blink's profile (RESEARCH.md, Decisions Log,
   // 2026-09-26).
   const engine = getLayoutEngine(ua) ?? 'blink'
@@ -1089,11 +1099,14 @@ function readEmojiWidth(font: string): number {
   const body = document.body as HTMLElement | null
   if (body === null && (document.head as HTMLElement | null) === null) return NaN
   const span = document.createElement('span')
-  span.style.cssText = 'all:initial!important;-webkit-locale:inherit!important;display:inline-block!important;visibility:hidden!important;position:absolute!important'
-  span.style.setProperty('font', font, 'important')
+  const style = span.style
+  if (style === undefined) throw new RangeError('missing inline style')
+  style.cssText = 'all:initial!important;-webkit-locale:inherit!important;display:inline-block!important;visibility:hidden!important;position:absolute!important'
+  style.setProperty('font', font, 'important')
   span.textContent = '\u{1F600}'
   let width = body === null ? NaN : readWidthIn(body, span)
-  if (Number.isNaN(width)) width = readWidthIn(document.documentElement, span)
+  const root = document.documentElement
+  if (Number.isNaN(width) && root !== null) width = readWidthIn(root, span)
   return width
 }
 
@@ -1107,7 +1120,7 @@ function readEmojiWidth(font: string): number {
 // within those digits, and the resolved one where something scales the span. The rectangle
 // is asked first: before the parser reaches <body>, Firefox makes the document's first boxes
 // for a rectangle and not for a resolved width, which is `auto` until then.
-function readWidthIn(parent: HTMLElement, span: HTMLElement): number {
+function readWidthIn(parent: Element, span: Element): number {
   parent.appendChild(span)
   const drawn = span.getBoundingClientRect().width
   const width = parseFloat(getComputedStyle(span).width)
@@ -1175,11 +1188,10 @@ function countEmojiGlyphs(text: string, measurement: FontMeasurement): number {
   const ends = new Int32Array(text.length)
   const graphemeCount = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)
   let count = 0
-  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++]!) {
+  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++] ?? missing()) {
     const grapheme = text.slice(start, ends[i])
     if (!emojiGraphemeRe.test(grapheme)) continue
-    const stretches = grapheme.match(emojiStretchRe)!
-    for (let s = 0; s < stretches.length; s++) count += getEmojiGlyphs(stretches[s]!, measurement)
+    for (const stretch of (grapheme.match(emojiStretchRe) ?? missing())) count += getEmojiGlyphs(stretch, measurement)
   }
   return count
 }
@@ -1227,7 +1239,7 @@ export function getSegmentFit(
       pairs = count > MAX_PREFIX_FIT_GRAPHEMES || addUpTo(advances, width)
       if (!pairs) advances = measureFitAdvances(seg, ends, count, 'segment-prefixes', metrics, measurement, emojiCorrection, followingSpaceWidth)
       lineStartExtras = [0]
-      for (let i = 1; i < count; i++) lineStartExtras.push(alone[i]! - advances[i]!)
+      for (let i = 1; i < count; i++) lineStartExtras.push((alone[i] ?? missing()) - (advances[i] ?? missing()))
     }
   } else {
     // Past MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
@@ -1248,13 +1260,23 @@ export function getSegmentFit(
     const kernings = getFontKanaKerning(measurement)
     if (kernings !== null) {
       for (let g = 1; g < count; g++) {
-        const kerning = getKanaKerning(seg, pairs && g > 1 ? ends[g - 2]! : 0, ends[g - 1]!, measurement, kernings)
+        const kerning = getKanaKerning(seg, pairs && g > 1 ? (ends[g - 2] ?? missing()) : 0, ends[g - 1] ?? missing(), measurement, kernings)
         if (kerning > 0) {
-          advances[g - 1] = advances[g - 1]! + kerning
+          const idx = g - 1
+          const advancesStore = advances
+          const advancesValue = (advancesStore[idx] ?? missing()) + kerning
+          if ((idx & 0x7fffffff) !== idx || idx > advancesStore.length) throw new RangeError('index')
+          advancesStore[idx] = advancesValue
         } else if (kerning < 0) {
-          advances[g] = advances[g]! + kerning
+          const advancesStore = advances
+          const advancesValue = (advancesStore[g] ?? missing()) + kerning
+          if ((g & 0x7fffffff) !== g || g > advancesStore.length) throw new RangeError('index')
+          advancesStore[g] = advancesValue
           lineStartExtras ??= zeros(count)
-          lineStartExtras[g] = lineStartExtras[g]! - kerning
+          const lineStartExtrasStore = lineStartExtras
+          const lineStartExtrasValue = (lineStartExtrasStore[g] ?? missing()) - kerning
+          if ((g & 0x7fffffff) !== g || g > lineStartExtrasStore.length) throw new RangeError('index')
+          lineStartExtrasStore[g] = lineStartExtrasValue
         }
       }
     }
@@ -1278,10 +1300,14 @@ function countLigaturesOnFirstLetter(seg: string, ends: Int32Array, advances: nu
   // The grapheme the ligature that holds the grapheme before this one starts with, or that grapheme.
   let first = 0
   for (let i = 1; i < advances.length; i++) {
-    const start = ends[i - 1]!
+    const start = ends[i - 1]
+    if (start === undefined) throw new RangeError('missing value')
     const alone = getTextWidth(seg.slice(start, ends[i]), measurement, emojiCorrection)
-    if (Math.round((advances[i]! - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : ends[i - 2]!, ends[i]), measurement)) {
-      advances[first] = advances[first]! + advances[i]!
+    if (Math.round(((advances[i] ?? missing()) - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : (ends[i - 2] ?? missing()), ends[i]), measurement)) {
+      const advancesValue = (advances[first] ?? missing()) + (advances[i] ?? missing())
+      if ((first & 0x7fffffff) !== first || first > advances.length) throw new RangeError('index')
+      advances[first] = advancesValue
+      if ((i & 0x7fffffff) !== i || i > advances.length) throw new RangeError('index')
       advances[i] = 0
     } else {
       first = i
@@ -1309,7 +1335,7 @@ function isLigature(pair: string, measurement: FontMeasurement): boolean {
 // Whether a segment's advances add up to its width, within the rounding of Canvas's widths.
 function addUpTo(advances: readonly number[], width: number): boolean {
   let sum = 0
-  for (let i = 0; i < advances.length; i++) sum += advances[i]!
+  for (let i = 0; i < advances.length; i++) sum += (advances[i] ?? missing())
   return Math.abs(sum - width) <= width * WORD_SUM_ROUNDING
 }
 
@@ -1330,8 +1356,9 @@ function measureFitAdvances(
   const advances: number[] = []
   let previousStart = 0
   let previousWidth = 0
-  for (let i = 0, start = 0; i < count; start = ends[i++]!) {
-    const end = ends[i]!
+  for (let i = 0, start = 0; i < count; start = ends[i++] ?? missing()) {
+    const end = ends[i]
+    if (end === undefined) throw new RangeError('missing value')
     if (prefixes) {
       // The whole segment is the last prefix; with a following space it was
       // measured together with that space.
@@ -1350,7 +1377,10 @@ function measureFitAdvances(
   // Advances that do not end in the whole segment's width take the kerning as a
   // difference, which needs the segment measured alone too.
   if (followingSpaceWidth !== null && !prefixes) {
-    advances[count - 1] = advances[count - 1]! + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
+    const idx = count - 1
+    const advancesValue = (advances[idx] ?? missing()) + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
+    if ((idx & 0x7fffffff) !== idx || idx > advances.length) throw new RangeError('index')
+    advances[idx] = advancesValue
   }
   return advances
 }
@@ -1451,8 +1481,9 @@ function createMeasureState(language: string | null): MeasureState {
 }
 
 export function clearMeasurementCaches(): void {
-  if (measureState === null) return
-  measureState.fonts.clear()
-  measureState.letterSpacedFonts.clear()
-  measureState.segments = 0
+  const state = measureState
+  if (state === null) return
+  state.fonts.clear()
+  state.letterSpacedFonts.clear()
+  state.segments = 0
 }

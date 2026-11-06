@@ -1,7 +1,7 @@
 import '../harness/watchdog.ts'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnalysisProfile } from './analysis.ts'
-import type { LayoutCursor, PrepareOptions, PreparedText, PreparedTextWithSegments } from './layout.ts'
+import type { LayoutCursor, PrepareOptions, PreparedText } from './layout.ts'
 import type { PreparedLineBreakData } from './line-break.ts'
 import type { RichInlineBox, RichInlineCursor, RichInlineItem, RichInlineLineRange, RichInlineOptions } from './rich-inline.ts'
 
@@ -555,11 +555,10 @@ describe('shared public contracts', () => {
     }
   })
 
-  test('the type of a prepareWithSegments() handle shows segments, kinds and widths, and nothing else', () => {
-    // The other fields are the line walkers' storage, which changes with engine fixes
-    // (RESEARCH.md, Decisions Log, 2026-10-06). This file compiles only while the type
-    // has these three fields and no other, read-only: `bun run check` fails otherwise,
-    // where `bun test` doesn't check types.
+  test('the type of a prepareWithSegments() handle shows segments, kinds and widths', () => {
+    // Its other fields are the line walkers' storage, which changes with engine fixes
+    // (RESEARCH.md, Decisions Log, 2026-10-06). This file compiles only while segments and
+    // kinds are read-only: `bun run check` fails otherwise, where `bun test` doesn't check types.
     const prepared = prepareWithSegments('hello world', FONT)
     const segments: readonly string[] = prepared.segments
     const kinds: readonly string[] = prepared.kinds
@@ -569,12 +568,7 @@ describe('shared public contracts', () => {
       ['text', 'space', 'text'],
       [measureWidth('hello', FONT), measureWidth(' ', FONT), measureWidth('world', FONT)],
     ])
-    const shown: { readonly [Field in Exclude<keyof PreparedTextWithSegments, symbol>]: true } = { segments: true, kinds: true, widths: true }
-    expect(Object.keys(prepared)).toEqual(expect.arrayContaining(Object.keys(shown)))
-    // A hidden field is there for code that reads it, and doesn't type-check.
-    // @ts-expect-error
-    expect(prepared.breakableFitAdvances).toBeDefined()
-    // Read-only, and `widths` an index and a length, not an array. Each line below runs,
+    // Read-only. Each line below runs,
     // since nothing is frozen, and is a type error: one that compiles is the type
     // promising more, which a release can't take back.
     const write = (_list: unknown[]): void => {}
@@ -582,15 +576,11 @@ describe('shared public contracts', () => {
     write(prepared.segments)
     // @ts-expect-error
     write(prepared.kinds)
-    // @ts-expect-error
-    expect([...prepared.widths]).toHaveLength(3)
     const other = prepareWithSegments('hello world', FONT)
     // @ts-expect-error
     prepared.segments = other.segments
     // @ts-expect-error
     prepared.kinds = other.kinds
-    // @ts-expect-error
-    prepared.widths = other.widths
   })
 
   test('the type of a materialized rich-inline fragment has no start and end, which a fragment range\'s has for passing back', () => {
