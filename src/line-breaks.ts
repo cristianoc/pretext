@@ -32,6 +32,7 @@
 //   locale for the user's first Chinese language (FontDescription.cpp:74-83, 107-113).
 //   Pretext resolves no bidi levels here and takes preparation's language as it is.
 
+import { missing } from './checked.js'
 import {
   appleQuoteRemaps,
   blinkLinePairsPacked,
@@ -100,7 +101,7 @@ export function unpackTable(packed: string): Uint8Array {
     const from = out - varint()
     // A copy that overlaps the bytes it writes repeats them, so it goes one byte at a time.
     if (from + length <= out) bytes.copyWithin(out, from, from + length)
-    else for (let k = 0; k < length; k++) bytes[out + k] = bytes[from + k]!
+    else for (let k = 0; k < length; k++) bytes[out + k] = bytes[from + k] ?? missing()
     out += length
   }
   if (out !== bytes.length) throw new Error('A packed table unpacked to the wrong length')
@@ -134,7 +135,7 @@ export type ClassTable = { readonly index: Uint16Array, readonly values: Uint8Ar
 // entry above that, where the engines' tries give their error value (unicode/ucptrie.h:615-620;
 // getLineBreakClass in src/gecko-line-breaks.ts gives ICU4X's itself).
 export function getClass(table: ClassTable, c: number): number {
-  return table.values[(table.index[c >> 8]! << 8) | (c & 0xff)]!
+  return table.values[((table.index[c >> 8] ?? missing()) << 8) | (c & 0xff)] ?? missing()
 }
 
 // The maps ship as one list of runs over U+0000..U+10FFFF, each run a length - 1 and a joint class:
@@ -154,29 +155,29 @@ export function unpackClassRuns(runs: Int32Array, remap: Uint8Array, blocks: num
   for (let r = 0; r <= runs.length; r += 2) {
     // Runs of joint classes that are one class in this map make one run, [c, end), written once
     // the next run's class differs or no run is left.
-    const following = r < runs.length ? remap[runs[r + 1]!]! : -1
+    const following = r < runs.length ? (remap[(runs[r + 1] ?? missing())] ?? missing()) : -1
     if (following !== value) {
       while (c < end) {
         const block = c >> 8
         if ((c & 0xff) === 0 && end - c >= 0x100) {
-          if (whole[value]! < 0) {
+          if ((whole[value] ?? missing()) < 0) {
             whole[value] = count
             values.fill(value, count << 8, ++count << 8)
           }
-          index.fill(whole[value]!, block, end >> 8)
+          index.fill(whole[value] ?? missing(), block, end >> 8)
           c = end & ~0xff
         } else {
           // A block that several runs share is its own: the first of them starts it.
           if ((c & 0xff) === 0) index[block] = count++
           const stop = Math.min(end, (block + 1) << 8)
-          const shift = (index[block]! - block) << 8
+          const shift = ((index[block] ?? missing()) - block) << 8
           values.fill(value, c + shift, stop + shift)
           c = stop
         }
       }
       value = following
     }
-    if (r < runs.length) end += runs[r]! + 1
+    if (r < runs.length) end += (runs[r] ?? missing()) + 1
   }
   if (end !== 0x110000) throw new Error('The class runs don\'t cover U+0000..U+10FFFF')
   return { index, values }
@@ -188,9 +189,9 @@ let classRemaps: Uint8Array | null = null
 
 export function unpackClasses(map: ClassMap): ClassTable {
   const [row, blocks] = classMaps[map]
-  classRuns ??= unpackVarints(classRunsVarints)
+  const runs = classRuns ??= unpackVarints(classRunsVarints)
   classRemaps ??= unpackTable(classRemapsPacked)
-  return unpackClassRuns(classRuns, classRemaps.subarray(row * jointClassCount), blocks)
+  return unpackClassRuns(runs, classRemaps.subarray(row * jointClassCount), blocks)
 }
 
 // A regular expression built at its first use, for the ones most text never reaches. Where V8 or
@@ -228,9 +229,9 @@ const astralProperties = new Map<number, number>()
 export function hasProperty(cp: number, property: number): boolean {
   const bmp = bmpProperties ??= new Uint16Array(0x10000)
   const has = 1 << (property * 2)
-  let bits = cp < 0x10000 ? bmp[cp]! : astralProperties.get(cp) ?? 0
+  let bits = cp < 0x10000 ? (bmp[cp] ?? missing()) : astralProperties.get(cp) ?? 0
   if ((bits & has << 1) === 0) {
-    bits |= has << 1 | (PROPERTY_TESTS[property]!().test(String.fromCodePoint(cp)) ? has : 0)
+    bits |= has << 1 | ((PROPERTY_TESTS[property] ?? missing())().test(String.fromCodePoint(cp)) ? has : 0)
     if (cp < 0x10000) bmp[cp] = bits
     else astralProperties.set(cp, bits)
   }
@@ -279,13 +280,13 @@ export function unpackStateRows(width: number, states: number, base: Uint16Array
   const rows = new Uint16Array(states * width)
   if (base !== null) rows.set(base)
   for (let i = 0, row = -width; i < differences.length;) {
-    row += (differences[i++]! + 1) * width
-    const back = differences[i++]! * width
+    row += ((differences[i++] ?? missing()) + 1) * width
+    const back = (differences[i++] ?? missing()) * width
     if (back > 0) rows.copyWithin(row, row - back, row - back + width)
     let at = row - 1
-    for (let n = differences[i++]!; n > 0; n--) {
-      at += 1 + differences[i++]!
-      rows[at] = differences[i++]!
+    for (let n = differences[i++] ?? missing(); n > 0; n--) {
+      at += 1 + (differences[i++] ?? missing())
+      rows[at] = differences[i++] ?? missing()
     }
   }
   return rows
@@ -357,25 +358,28 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
       } else { // rbbi.cpp:850-855, with Apple's overrides (apple-rbbi.cpp:1061-1084)
         let overridden = false
         for (let i = 0; i < overrideCount; i++) {
-          if (c === overrideChars[i]) { category = overrides.categories[i]!; overridden = true; break }
+          if (c === overrideChars[i]) { category = overrides.categories[i] ?? missing(); overridden = true; break }
         }
         if (!overridden) {
           category = getClass(r.classes, c)
           if (category >= dictionaryStart) dictionaryCharCount++
         }
       }
-      const state = rows[row + 3 + category]! // rbbi.cpp:874-877
+      const state = rows[row + 3 + category] // rbbi.cpp:874-877
+      if (state === undefined) throw new RangeError('missing value')
       row = state * width
 
-      const accepting = rows[row]! // rbbi.cpp:880-896
+      const accepting = rows[row] // rbbi.cpp:880-896
+      if (accepting === undefined) throw new RangeError('missing value')
       if (accepting === ACCEPTING_UNCONDITIONAL) {
         result = pos
-      } else if (accepting > ACCEPTING_UNCONDITIONAL && matches[accepting]! >= 0) {
-        boundary = matches[accepting]!
+      } else if (accepting > ACCEPTING_UNCONDITIONAL && (matches[accepting] ?? missing()) >= 0) {
+        boundary = matches[accepting] ?? missing()
         break
       }
 
-      const rule = rows[row + 1]! // rbbi.cpp:904-910
+      const rule = rows[row + 1] // rbbi.cpp:904-910
+      if (rule === undefined) throw new RangeError('missing value')
       if (rule > ACCEPTING_UNCONDITIONAL) matches[rule] = pos
 
       if (state === STOP_STATE) break // rbbi.cpp:912-917
@@ -408,8 +412,6 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
 }
 
 // --- Line tables ---
-
-type ChromiumLineTable = 'line_normal' | 'line_normal_cj'
 
 // Line_Break=SA for one code point: the line rules' dictionary categories.
 function isComplexContext(rules: BreakRules, c: number): boolean {
@@ -487,7 +489,7 @@ function shouldBreakFast(pairs: Uint8Array, lastLast: number, last: number, ch: 
   }
   if (last <= 0xff && ch <= 0xff) {
     const x = ch - 0x21
-    return (pairs[(last - 0x21) * 28 + (x >> 3)]! & (1 << (x & 7))) !== 0 ? CAN_BREAK : NO_BREAK
+    return ((pairs[(last - 0x21) * 28 + (x >> 3)] ?? missing()) & (1 << (x & 7))) !== 0 ? CAN_BREAK : NO_BREAK
   }
   return UNKNOWN
 }
@@ -522,8 +524,7 @@ export function getBlinkLineBreaks(text: string, keepAll: boolean, language: str
   const breaks = new Uint8Array(length + 1)
   if (length < 2) return breaks
   const pairs = blinkPairs ??= unpackTable(blinkLinePairsPacked)
-  const table: ChromiumLineTable = getBreakLanguage(language) === 'zh' ? 'line_normal_cj' : 'line_normal'
-  const rules = getBreakRules(`chromium/${table}`)
+  const rules = getBreakRules(getBreakLanguage(language) === 'zh' ? 'chromium/line_normal_cj' : 'chromium/line_normal')
   let icu: Uint8Array | null = null
   let lastLast = 0
   let last = text.charCodeAt(0)
@@ -680,12 +681,13 @@ function following(f: Factory, location: number): number {
     markRuleBoundaries(f.line.rules, text, flags, f.line.overrides)
     next = new Int32Array(text.length + 2)
     next[text.length + 1] = -1
-    for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : next[p + 1]!
+    for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : (next[p + 1] ?? missing())
     f.nextBoundary = next
   }
   const o = location + f.priorLength + 1
   if (o >= next.length) return -1
-  const b = next[o]!
+  const b = next[o]
+  if (b === undefined) throw new RangeError('missing value')
   return b < 0 ? -1 : b - f.priorLength
 }
 
@@ -717,7 +719,7 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
     if (before <= 0xff && after <= 0xff) {
       if (before >= 0x21 && after >= 0x21) {
         const x = after - 0x21
-        if ((pairs[(before - 0x21) * 28 + (x >> 3)]! & (1 << (x & 7))) !== 0) return i
+        if (((pairs[(before - 0x21) * 28 + (x >> 3)] ?? missing()) & (1 << (x & 7))) !== 0) return i
       }
       continue
     }
@@ -770,6 +772,8 @@ function nextBreakableSpace(s: string, startPosition: number, punctuationBreaks:
 // ko, line_cj.brk for zh and line.brk otherwise, plus the locale's quotation remap
 // (apple-brkiter.cpp:458-473, apple-rbbi.cpp:406-487), looked up with ICU's parent fallback
 // under ICU's case: lowercase language, title-case script, uppercase region (uloc_getName).
+const appleQuoteRemapTable: ReadonlyMap<string, readonly number[]> = new Map(Object.entries(appleQuoteRemaps))
+
 export function getWebKitLineRules(language: string | null): WebKitLineRules {
   const locale = language ?? ''
   let line = webkitLineRules.get(locale)
@@ -777,21 +781,22 @@ export function getWebKitLineRules(language: string | null): WebKitLineRules {
   const breakLanguage = getBreakLanguage(locale)
   const rules = getBreakRules(breakLanguage === 'ja' || breakLanguage === 'ko' ? 'apple/line_normal' : breakLanguage === 'zh' ? 'apple/line_cj' : 'apple/line')
   const subtags = locale.split(/[-_]/)
-  let name = subtags[0]!.toLowerCase()
+  let name = (subtags[0] ?? missing()).toLowerCase()
   for (let k = 1; k < subtags.length; k++) {
-    const subtag = subtags[k]!
-    name += '_' + (subtag.length === 4 ? subtag[0]!.toUpperCase() + subtag.slice(1).toLowerCase() : subtag.toUpperCase())
+    const subtag = subtags[k]
+    if (subtag === undefined) throw new RangeError('missing value')
+    name += '_' + (subtag.length === 4 ? (subtag[0] ?? missing()).toUpperCase() + subtag.slice(1).toLowerCase() : subtag.toUpperCase())
   }
-  let remap = appleQuoteRemaps[name]
+  let remap = appleQuoteRemapTable.get(name)
   while (remap === undefined) {
     const cut = name.lastIndexOf('_')
     name = cut < 0 ? '' : name.slice(0, cut)
-    remap = appleQuoteRemaps[name]
+    remap = appleQuoteRemapTable.get(name)
   }
   const chars: number[] = []
   const categories: number[] = []
   for (let k = 0; k < remap.length; k += 2) {
-    chars.push(remap[k]!)
+    chars.push(remap[k] ?? missing())
     categories.push(getClass(rules.classes, remap[k + 1] === 0 ? 0x7b : 0x7d))
   }
   line = { rules, overrides: { chars, categories } }

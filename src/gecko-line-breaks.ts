@@ -29,6 +29,7 @@
 //   normal or keep-all under Strict line breaking, which line-break: auto selects
 //   (intl/lwbrk/LineBreaker.cpp:26-31).
 
+import { missing } from './checked.js'
 import {
   geckoLineBreakStatesPacked,
   geckoLineEotProperty,
@@ -116,7 +117,7 @@ export function isDiscardable(ch: number, is8bit: boolean): boolean {
 }
 const isSpaceOrTab = (ch: number) => ch === 0x20 || ch === 0x09
 // IsSpaceOrTabOrSegmentBreak, nsTextFrameUtils.cpp:51-57: a white-space run's white space, which a CR or FF isn't.
-export const isSpaceOrTabOrSegmentBreak = (ch: number) => ch === 0x20 || ch === 0x09 || ch === 0x0a
+export const isSpaceOrTabOrSegmentBreak = (ch: number): boolean => ch === 0x20 || ch === 0x09 || ch === 0x0a
 
 // IsSpaceCombiningSequenceTail(const char16_t*, int32_t), nsTextFrameUtils.cpp:24-30, on code units.
 export function isSpaceCombiningSequenceTail(text: string, from: number): boolean {
@@ -131,7 +132,7 @@ export function isSpaceCombiningSequenceTail(text: string, from: number): boolea
 // aLangIsJapaneseOrChinese, nsTextFrameUtils.cpp:273-285, which takes only `-` after the subtag.
 export function isJapaneseOrChinese(language: string | null): boolean {
   const breakLanguage = getBreakLanguage(language)
-  return (breakLanguage === 'ja' || breakLanguage === 'zh') && language!.charCodeAt(2) !== 0x5f
+  return (breakLanguage === 'ja' || breakLanguage === 'zh') && (language ?? missing()).charCodeAt(2) !== 0x5f
 }
 
 // Gecko's East Asian test for the white-space run [start, end) (TransformWhiteSpaces,
@@ -151,7 +152,7 @@ export function isEastAsianSegmentBreak(text: string, start: number, end: number
   let after: number
   pos = end
   do {
-    after = text.codePointAt(pos)!
+    after = text.codePointAt(pos) ?? missing()
     pos += after > 0xffff ? 2 : 1
   } while (hasProperty(after, DEFAULT_IGNORABLE) && pos < text.length)
   return (isSegmentBreakSkipChar(widths, before) && isSegmentBreakSkipChar(widths, after)) ||
@@ -227,8 +228,8 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
       }
       if (isSpaceOrTabOrSegmentBreak(ch)) {
         if (i >= frameEnd) {
-          while (frame < frameStarts!.length && frameStarts![frame]! <= i) frame++
-          frameEnd = frame < frameStarts!.length ? frameStarts![frame]! : len
+          while (frame < (frameStarts ?? missing()).length && ((frameStarts ?? missing())[frame] ?? missing()) <= i) frame++
+          frameEnd = frame < (frameStarts ?? missing()).length ? ((frameStarts ?? missing())[frame] ?? missing()) : len
         }
         let keepLastSpace = false
         let hasSegmentBreak = ch === 0x0a
@@ -286,7 +287,8 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
   let sliceStart = 0
   let sliceEnd = 0
   for (let k = 0; k < n; k++) {
-    const i = orig[k]!
+    const i = orig[k]
+    if (i === undefined) throw new RangeError('missing value')
     const ch = input.charCodeAt(i)
     if (!preserveWhiteSpace && (ch === 0x09 || ch === 0x0a)) {
       text += input.slice(sliceStart, sliceEnd) + ' '
@@ -348,7 +350,7 @@ function setupClusterBoundaries(g: Glyphs, text: string, from: number, to: numbe
     const ch = text.charCodeAt(pos)
     if (ch === 0x20 || ch === 0x3000) g.isSpace[pos] = 1
     else if (ch === 0x09af && pos > from && text.charCodeAt(pos - 1) === 0x09cd) extendCluster(g, pos) // BENGALI_YA after BENGALI_VIRAMA
-    const end = count === 0 ? pos + 1 : ends[k]!
+    const end = count === 0 ? pos + 1 : (ends[k] ?? missing())
     for (pos++; pos < end; pos++) extendCluster(g, pos)
   }
 }
@@ -408,9 +410,9 @@ function getComplexLanguage(u: number): number {
 function segmentComplex(units: number[]): number[] {
   const result: number[] = []
   for (let i = 0; i < units.length;) {
-    const language = getComplexLanguage(units[i]!)
+    const language = getComplexLanguage(units[i] ?? missing())
     let j = i + 1
-    while (j < units.length && getComplexLanguage(units[j]!) === language) j++
+    while (j < units.length && getComplexLanguage(units[j] ?? missing()) === language) j++
     if (language !== 0) {
       let slice = ''
       for (let k = i; k < j; k += 4096) slice += String.fromCharCode(...units.slice(k, Math.min(j, k + 4096)))
@@ -459,7 +461,8 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
   for (;;) {
     // Break points cached by a complex-script run (:840-855).
     if (cacheAt < cache.length) {
-      const firstPos = cache[cacheAt++]! - cacheOffset
+      const firstPos = (cache[cacheAt] ?? missing()) - cacheOffset
+      cacheAt++
       let i = 0
       while (i !== firstPos) {
         i += cp > 0xffff ? 2 : 1 // Utf16::char_len (rule_segmenter.rs:335-341)
@@ -523,7 +526,8 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
         break
       }
 
-      const breakState = states[leftProp * geckoLinePropertyCount + rightProp]! // (:702-706, 953)
+      const breakState = states[leftProp * geckoLinePropertyCount + rightProp] // (:702-706, 953)
+      if (breakState === undefined) throw new RangeError('missing value')
       if (breakState === BREAK || breakState === NO_MATCH) {
         if (afterZwj) continue
         break
@@ -559,7 +563,8 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
           continue
         }
 
-        const next = states[index * geckoLinePropertyCount + prop]! // (:1021-1061)
+        const next = states[index * geckoLinePropertyCount + prop] // (:1021-1061)
+        if (next === undefined) throw new RangeError('missing value')
         if (next === KEEP) continue outer
         if (next === NO_MATCH) {
           front = prevFront; pos = prevPos; cp = prevCp
@@ -674,7 +679,8 @@ export function getGeckoLineBreaks(
   const line = lineData ??= { classes: unpackClasses('gecko/line'), states: unpackTable(geckoLineBreakStatesPacked) }
   const state = getBreakStates(line, tr.text, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll)
   for (let t = 1; t < n; t++) {
-    const rawPos = tr.orig[t]!
+    const rawPos = tr.orig[t]
+    if (rawPos === undefined) throw new RangeError('missing value')
     const normal = state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)
     const afterSoftHyphen = tr.skipped[rawPos - 1] === 1 && source.charCodeAt(rawPos - 1) === CH_SHY
     if (normal || afterSoftHyphen) {
