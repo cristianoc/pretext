@@ -703,9 +703,8 @@ function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, pre
   const breaks = new Uint8Array(source.length + 1)
   let previous = -1
   for (let k = 0; k < starts.length; k++) {
-    const start = starts[k]
-    if (start === undefined) throw new RangeError('missing value')
-    const end = k + 1 < starts.length ? (starts[k + 1] ?? missing()) : source.length
+    const start = starts[k]!
+    const end = k + 1 < starts.length ? starts[k + 1]! : source.length
     if (start === end) continue
     // An item of one unit, as a space between two styled words or an atomic item's U+FFFC, has
     // no break inside, and its scan marks its end only after a line or paragraph separator
