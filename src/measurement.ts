@@ -551,8 +551,7 @@ function getCanvasFont(font: string, families: readonly string[]): string {
   // A quoted family name, or an unquoted generic keyword with what precedes it.
   return font.slice(0, start) + font.slice(start).replace(/("[^"]*"|'[^']*')|(^|,)(\s*)(serif|sans-serif|cursive|fantasy|monospace)(?=\s*(?:,|$))/gi, (item: string, quoted: string | undefined, separator: string | undefined, space: string | undefined, keyword: string | undefined) => {
     if (quoted !== undefined || separator === undefined || space === undefined || keyword === undefined) return item
-    const named = families[genericKeywords.indexOf(keyword.toLowerCase())]
-    if (named === undefined) throw new RangeError('missing value')
+    const named = families[genericKeywords.indexOf(keyword.toLowerCase())] ?? ''
     return named === '' ? item : separator + space + named
   })
 }
