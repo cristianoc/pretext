@@ -779,8 +779,8 @@ function getHyphenRooms(hyphenWidths: number[], itemSegments: number[], segmentI
 // A soft hyphen, as a segment of any kind: Gecko drops soft hyphens from a text frame's text
 // (IsDiscardable, nsTextFrameUtils.cpp:32-49).
 function isSoftHyphenSegment(data: PreparedSegments, i: number): boolean {
-  const kind = data.segmentFlags[i]! & KIND_BITS
-  return kind === SOFT_HYPHEN || ((kind === ZERO_WIDTH_BREAK || kind === ZERO_WIDTH_GLUE) && data.segments[i]!.charCodeAt(0) === 0x00AD)
+  const kind = (data.segmentFlags[i] ?? missing()) & KIND_BITS
+  return kind === SOFT_HYPHEN || ((kind === ZERO_WIDTH_BREAK || kind === ZERO_WIDTH_GLUE) && (data.segments[i] ?? missing()).charCodeAt(0) === 0x00AD)
 }
 
 // What a line reads of the text around each object of width 0 where the engine places one though
@@ -838,18 +838,21 @@ function setEmptyObjectFacts(
   let endSpaceItem = -1
   if (runStart < source.length) {
     let index = starts.length - 1
-    while (index > 0 && starts[index]! > runStart) index--
-    if (itemSegments[index]! < itemSegments[index + 1]!) endSpaceItem = index
+    while (index > 0 && (starts[index] ?? missing()) > runStart) index--
+    if ((itemSegments[index] ?? missing()) < (itemSegments[index + 1] ?? missing())) endSpaceItem = index
   }
   // Whether what follows an object keeps it on its line, for an object right before the item at
   // hand, from the paragraph's end back.
   let keeps = true
   for (let index = items.length - 1; index >= 0; index--) {
-    const first = itemSegments[index]!
-    const end = itemSegments[index + 1]!
+    const first = itemSegments[index]
+    if (first === undefined) throw new RangeError('missing value')
+    const end = itemSegments[index + 1]
+    if (end === undefined) throw new RangeError('missing value')
     if (first === end) continue
-    const kind = segmentFlags[first]! & KIND_BITS
-    const item = items[index]!
+    const kind = (segmentFlags[first] ?? missing()) & KIND_BITS
+    const item = items[index]
+    if (item === undefined) throw new RangeError('missing value')
     if (item.text === undefined || item.break === 'never') {
       if (widths[first] !== 0) {
         keeps = true
@@ -857,9 +860,9 @@ function setEmptyObjectFacts(
       }
       let before = first - 1
       while (before >= 0 && isSoftHyphenSegment(data, before)) before--
-      const beforeKind = before < 0 ? TEXT : segmentFlags[before]! & KIND_BITS
+      const beforeKind = before < 0 ? TEXT : (segmentFlags[before] ?? missing()) & KIND_BITS
       let space = -1
-      if (beforeKind === SPACE) space = segmentItems[before] === segmentItems[first - 1] ? widths[before]! + ((segmentFlags[before]! & SPACED) !== 0 ? letterSpacing : 0) : 0
+      if (beforeKind === SPACE) space = segmentItems[before] === segmentItems[first - 1] ? (widths[before] ?? missing()) + (((segmentFlags[before] ?? missing()) & SPACED) !== 0 ? letterSpacing : 0) : 0
       else if (beforeKind === TAB || (beforeKind === PRESERVED_SPACE && segmentItems[before] !== segmentItems[before + 1])) space = 0
       const spacesStore = spaces
       if ((first & 0x7fffffff) !== first || first > spacesStore.length) throw new RangeError('index')
@@ -875,7 +878,7 @@ function setEmptyObjectFacts(
     for (let i = first; i < end; i++) {
       if (isSoftHyphenSegment(data, i)) continue
       softHyphens = false
-      if ((segmentFlags[i]! & KIND_BITS) === SPACE) holdsSpace = true
+      if (((segmentFlags[i] ?? missing()) & KIND_BITS) === SPACE) holdsSpace = true
       else establishesLine = true
     }
     if (softHyphens) continue
@@ -972,7 +975,6 @@ function zeroList(count: number): number[] {
 // space (nextWrapOpportunity, InlineFormattingUtils.cpp:470-475, 530-538), so it fits the end
 // edge too of an item of white space that ends there. Gecko fits a frame's whole width, its
 // cloned end edge too (CanPlaceFrame, nsLineLayout.cpp:1217-1270).
-/** @requires safeInteger(from) && safeInteger(to) && 0 <= from && from < to && to <= flags.length */
 function getOpeningFit(flags: number[], from: number, to: number, extraWidth: number, afterTextSpaces: boolean, profile: EngineProfile): number {
   const fit = profile.paddedOpeningFit
   const firstKind = flags[from]! & KIND_BITS
@@ -1184,7 +1186,8 @@ function createLine(
   if (rest < 0 && fragments.length > 0) fragments[fragments.length - 1]!.occupiedWidth -= rest
   const openingEdges = items.openingEdges
   for (let k = fragments.length - 1; k >= 0 && rest > 0; k--) {
-    const last = fragments[k]!
+    const last = fragments[k]
+    if (last === undefined) throw new RangeError('missing value')
     // The edge of a padded opening stays painted: it is the first segment of its item, so of a fragment.
     const edge = openingEdges === null || last.start.graphemeIndex > 0 ? 0 : (openingEdges[(itemSegments[last.itemIndex] ?? missing()) + last.start.segmentIndex] ?? missing())
     if (last.occupiedWidth > edge) {
@@ -1211,7 +1214,7 @@ function createLine(
 // The paragraph's segment a cursor names, or the segment count for one past the last item.
 function getSegmentIndex(flow: InternalPreparedRichInline, cursor: RichInlineCursor): number {
   const { itemSegments } = flow
-  return cursor.itemIndex < itemSegments.length ? itemSegments[cursor.itemIndex]! + cursor.segmentIndex : flow.data.widths.length
+  return cursor.itemIndex < itemSegments.length ? (itemSegments[cursor.itemIndex] ?? missing()) + cursor.segmentIndex : flow.data.widths.length
 }
 
 export function layoutNextRichInlineLineRange(
@@ -1238,7 +1241,6 @@ export function layoutNextRichInlineLineRange(
 // at `itemStart`, from the offset in the paragraph's text each unit comes from, where they aren't
 // one stretch of it: Gecko removes a line feed between two ideographs, and white space after a bidi
 // control that follows white space. Else null.
-/** @requires safeInteger(from) && safeInteger(to) && 0 <= from && to <= offsets.length */
 function getSourceUnits(offsets: Int32Array, from: number, to: number, itemStart: number): number[] | null {
   if (to <= from || offsets[to - 1]! - offsets[from]! === to - 1 - from) return null
   const units: number[] = []

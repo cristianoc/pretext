@@ -681,7 +681,7 @@ function following(f: Factory, location: number): number {
     markRuleBoundaries(f.line.rules, text, flags, f.line.overrides)
     next = new Int32Array(text.length + 2)
     next[text.length + 1] = -1
-    for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : next[p + 1]!
+    for (let p = text.length; p >= 0; p--) next[p] = flags[p] === 1 ? p : (next[p + 1] ?? missing())
     f.nextBoundary = next
   }
   const o = location + f.priorLength + 1

@@ -31,7 +31,6 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
 
 // Where grapheme `graphemeIndex` of a segment starts in its text: its end past its last grapheme,
 // where a range kept from a longer text stops.
-/** @requires safeInteger(segmentIndex) && 0 <= segmentIndex && segmentIndex < prepared.segments.length */
 export function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, graphemeIndex: number): number {
   if (graphemeIndex <= 0) return 0
   const ends = getGraphemeEnds(prepared, segmentIndex)

@@ -136,7 +136,7 @@ export function isDiscretionaryLineEnd(
   endGraphemeIndex: number,
 ): boolean {
   return endGraphemeIndex === 0 && endSegmentIndex > 0 && endSegmentIndex < segmentCount &&
-    (segmentFlags[endSegmentIndex - 1]! & KIND_BITS) === SOFT_HYPHEN
+    ((segmentFlags[endSegmentIndex - 1] ?? missing()) & KIND_BITS) === SOFT_HYPHEN
 }
 
 // What a line's start leaves out, by a segment's flags: a collapsible space, a soft hyphen, and a
@@ -270,9 +270,9 @@ export function normalizePreparedLineStart(
   if (cursor.graphemeIndex > 0) return true
 
   let atChunkStart = segmentIndex === 0 || ((segmentFlags[segmentIndex - 1] ?? missing()) & KIND_BITS) === HARD_BREAK
-  /** @invariant safeInteger(segmentIndex) && safeInteger(segmentCount) && 0 <= segmentIndex && segmentIndex < segmentCount && segmentCount <= segmentFlags.length */
   while (true) {
-    const flags = segmentFlags[segmentIndex]!
+    const flags = segmentFlags[segmentIndex]
+    if (flags === undefined) throw new RangeError('missing value')
     if ((flags & KIND_BITS) === HARD_BREAK) {
       if (atChunkStart) {
         cursor.segmentIndex = segmentIndex
@@ -314,7 +314,7 @@ export function walkPreparedLinesRaw(
   const segmentCount = prepared.widths.length
   while (true) {
     let startSegmentIndex = cursor.segmentIndex
-    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex]!)) {
+    while (startSegmentIndex < segmentCount && consumesAtLineStart(segmentFlags[startSegmentIndex] ?? missing())) {
       startSegmentIndex++
     }
     if (startSegmentIndex >= segmentCount) return stats.lineCount
@@ -434,7 +434,6 @@ function countSteppedLines(prepared: PreparedLineData, maxWidth: number): number
 // spaces and tabs (nsLineBreaker.cpp:323, :586) and doesn't hang a tab, so where the white space
 // runs into a tab, Firefox moves all of it to the next line with the tab. The walker asks once
 // per run, so a long run costs one pass.
-/** @requires safeInteger(start) && safeInteger(segmentCount) && 0 <= start && start < segmentCount && segmentCount <= segmentFlags.length */
 function staysAfterObject(segmentFlags: Uint8Array, segmentCount: number, start: number, hangingKinds: number): boolean {
   let after = start + 1
   while (after < segmentCount && (1 << (segmentFlags[after]! & KIND_BITS) & hangingKinds) !== 0) after++

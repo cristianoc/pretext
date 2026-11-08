@@ -149,7 +149,7 @@ function getScriptFactsAt(text: string, i: number): number {
   const facts = getScriptFacts(c)
   const next = i + (c > 0xFFFF ? 2 : 1)
   if ((facts & TAKES_MARK_SCRIPTS) !== 0 && next < text.length) {
-    const markScripts = getScriptFacts(text.codePointAt(next)!) >> MARK_SCRIPTS_SHIFT & ANY_SCRIPT
+    const markScripts = getScriptFacts(text.codePointAt(next) ?? missing()) >> MARK_SCRIPTS_SHIFT & ANY_SCRIPT
     if (markScripts !== 0) return facts & ~ANY_SCRIPT | markScripts
   }
   return facts
@@ -190,7 +190,7 @@ function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
     // No bracket's code is as low as a run's script.
     const opened = (facts & CLOSING_BRACKET) !== 0 ? openBrackets.lastIndexOf(c - (facts >> OPENING_BRACKET_SHIFT)) : -1
     if (opened >= 0) {
-      if (openBrackets[opened + 1] !== 0) scripts = openBrackets[opened + 1]!
+      if (openBrackets[opened + 1] !== 0) scripts = openBrackets[opened + 1] ?? missing()
       openBrackets.splice(opened + 2)
     }
     if ((runs.scripts & scripts) !== 0) {
@@ -199,6 +199,7 @@ function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
       // The run that ends resolves to its first script (ResolveCurrentScript, :639-642), which
       // the brackets opened in it take.
       for (let k = openBrackets.length - 1; k > 0 && openBrackets[k] === 0; k -= 2) {
+        if ((k & 0x7fffffff) !== k || k > openBrackets.length) throw new RangeError('index')
         openBrackets[k] = runs.scripts & -runs.scripts
       }
       runs.scripts = scripts
