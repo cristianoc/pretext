@@ -205,6 +205,7 @@ function normalizeWhitespacePreWrap(text: string): string {
 
 const combiningMarkRe = /\p{M}/u
 
+/** @ensures safeInteger(result) && result >= 0 && result <= 15 */
 function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if (whiteSpace === 'pre-wrap') {
     if (code === 0x20) return PRESERVED_SPACE
@@ -281,6 +282,7 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 // without a hyphen, and Firefox, which drops soft hyphens from its text runs, has nothing there
 // (DROPPED). One with only soft hyphens before it on its chunk stays a soft hyphen: no line ends
 // at a chunk's start, and a line's start leaves either out.
+/** @ensures safeInteger(result) && result >= 0 && result <= 15 */
 function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if ((code === 0x2028 || code === 0x2029) && ((breaks[i + 1] ?? missing()) & FORCED_BREAK) !== 0) return HARD_BREAK
   if (code === 0x00AD && ((breaks[i + 1] ?? missing()) & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
@@ -347,6 +349,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   let droppedEnd = -1
   // The last segment's kind, -1 before the first unit, which starts one.
   let lastKind = -1
+  /** @invariant starts.length === flags.length && safeInteger(lastKind) && lastKind < 16 * flags.length */
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
     if (dropsBidiControl && i < droppedEnd) continue
@@ -386,12 +389,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       ((breaks[i] ?? missing()) & (BREAK | ITEM_START)) === 0 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i] ?? missing())) &&
       gathersKind(kind) && kind === lastKind
     ) {
-      if (((breaks[i] ?? missing()) & CLUSTER_START) !== 0) {
-        const idx = flags.length - 1
-        const flagsValue = (flags[idx] ?? missing()) & ~ONE_CLUSTER
-        if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
-        flags[idx] = flagsValue
-      }
+      if (((breaks[i] ?? missing()) & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~ONE_CLUSTER
       continue
     }
     markRun = unbroken && kind === TEXT && combiningMarkRe.test(normalized[i] ?? missing()) &&
