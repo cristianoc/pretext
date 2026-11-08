@@ -660,7 +660,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     from = to
   }
   const segmentCount = widths.length
-  /** @invariant forall i in itemSegments: safeInteger(itemSegments[i]) && 0 <= itemSegments[i] && itemSegments[i] <= widths.length */
   while (itemSegments.length <= items.length) itemSegments.push(segmentCount)
   const segmentFlags = segmentCount === flags.length ? flags : flags.subarray(0, segmentCount)
   // A paragraph whose lines return from an unfit hyphen marks every break the scan gives before
