@@ -29,9 +29,13 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
   return ends
 }
 
-// Where grapheme `graphemeIndex` of a segment starts in its text.
+// Where grapheme `graphemeIndex` of a segment starts in its text: its end past its last grapheme,
+// where a range kept from a longer text stops.
 function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, graphemeIndex: number): number {
-  return graphemeIndex === 0 ? 0 : (getGraphemeEnds(prepared, segmentIndex)[graphemeIndex - 1] ?? missing())
+  if (graphemeIndex <= 0) return 0
+  const ends = getGraphemeEnds(prepared, segmentIndex)
+  const end = ends[graphemeIndex - 1] ?? 0
+  return end === 0 ? ends.length : end
 }
 
 // The text of a range of `prepared`'s segments, with no hyphen: that of a rich-inline fragment its
