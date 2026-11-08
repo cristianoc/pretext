@@ -612,9 +612,8 @@ function removeItemsSkippableSegmentBreaks(text: string, starts: number[], profi
   let copied = 0
   let newline = text.indexOf('\n')
   for (let k = 0; k < starts.length; k++) {
-    const start = starts[k]
-    if (start === undefined) throw new RangeError('missing value')
-    const end = k + 1 < starts.length ? (starts[k + 1] ?? missing()) : text.length
+    const start = starts[k]!
+    const end = k + 1 < starts.length ? starts[k + 1]! : text.length
     resultStarts.push(result.length + start - copied)
     if (newline < 0 || newline >= end) continue
     const item = text.slice(start, end)

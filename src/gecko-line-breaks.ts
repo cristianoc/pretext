@@ -410,9 +410,9 @@ function getComplexLanguage(u: number): number {
 function segmentComplex(units: number[]): number[] {
   const result: number[] = []
   for (let i = 0; i < units.length;) {
-    const language = getComplexLanguage(units[i] ?? missing())
+    const language = getComplexLanguage(units[i]!)
     let j = i + 1
-    while (j < units.length && getComplexLanguage(units[j] ?? missing()) === language) j++
+    while (j < units.length && getComplexLanguage(units[j]!) === language) j++
     if (language !== 0) {
       let slice = ''
       for (let k = i; k < j; k += 4096) slice += String.fromCharCode(...units.slice(k, Math.min(j, k + 4096)))

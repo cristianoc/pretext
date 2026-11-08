@@ -162,7 +162,7 @@ function getScriptFactsAt(text: string, i: number): number {
 function mayHoldCursive(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     if (text.charCodeAt(i) < 0x80) continue
-    const facts = getScriptFacts(text.codePointAt(i) ?? missing())
+    const facts = getScriptFacts(text.codePointAt(i)!)
     if ((facts & ANY_SCRIPT) === CURSIVE_SCRIPT || (facts >> MARK_SCRIPTS_SHIFT & ANY_SCRIPT) === CURSIVE_SCRIPT) return true
   }
   return false

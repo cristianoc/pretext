@@ -1335,7 +1335,7 @@ function isLigature(pair: string, measurement: FontMeasurement): boolean {
 // Whether a segment's advances add up to its width, within the rounding of Canvas's widths.
 function addUpTo(advances: readonly number[], width: number): boolean {
   let sum = 0
-  for (let i = 0; i < advances.length; i++) sum += (advances[i] ?? missing())
+  for (let i = 0; i < advances.length; i++) sum += advances[i]!
   return Math.abs(sum - width) <= width * WORD_SUM_ROUNDING
 }
 
