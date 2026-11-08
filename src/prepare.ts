@@ -655,7 +655,7 @@ export function measureAnalysis(
     const trims = hanKerning.widthTrims
     if (trims !== null) for (let i = 0; i < trims.length; i++) {
       const idx = base + i
-      const widthsValue = (widths[idx] ?? missing()) - (trims[i] ?? missing())
+      const widthsValue = (widths[idx] ?? missing()) - trims[i]!
       if ((idx & 0x7fffffff) !== idx || idx > widths.length) throw new RangeError('index')
       widths[idx] = widthsValue
     }
