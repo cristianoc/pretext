@@ -165,8 +165,11 @@ export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProf
 // run reads through the bidi controls in it and after it (TransformText, nsTextFrameUtils.cpp:
 // 319-345), so there it is the first white space after the last character that is neither, and
 // the controls stay.
+/** @requires safeInteger(from) && 0 <= from
+ * @ensures safeInteger(result) && 0 <= result && result <= text.length */
 function getTrailingCollapsibleStart(text: string, from: number, profile: AnalysisProfile): number {
   let start = text.length
+  /** @invariant safeInteger(start) && 0 <= start && start <= text.length */
   for (let i = text.length - 1; i >= from; i--) {
     const code = text.charCodeAt(i)
     if (isCollapsibleSpaceCode(code)) start = i
@@ -497,10 +500,10 @@ export function analyzeText(
       if (!preserve && source !== normalized && /\r(?!\n)/.test(source)) {
         let count = 0
         for (let i = 0; i < source.length; i++) {
-          if (source.charCodeAt(i) !== 0x0D || source.charCodeAt(i + 1) === 0x0A) sourceBreaks[count++] = sourceBreaks[i] ?? missing()
-          else sourceBreaks[i + 1] = (sourceBreaks[i + 1] ?? missing()) | (sourceBreaks[i] ?? missing())
+          if (source.charCodeAt(i) !== 0x0D || source.charCodeAt(i + 1) === 0x0A) sourceBreaks[count++] = sourceBreaks[i]!
+          else sourceBreaks[i + 1] = sourceBreaks[i + 1]! | sourceBreaks[i]!
         }
-        sourceBreaks[count] = sourceBreaks[source.length] ?? missing()
+        sourceBreaks[count] = sourceBreaks[source.length]!
         source = source.replace(/\r(?!\n)/g, '')
         normalized = collapseWhitespaceNormal(source)
       }
@@ -568,12 +571,11 @@ export function analyzeText(
             copied = i + 1
             continue
           }
-          const breakBefore = sourceBreaks[i]
-          if (breakBefore === undefined) throw new RangeError('missing value')
+          const breakBefore = sourceBreaks[i]!
           sourceBreaks[count++] = last >= 0 && last < i - 1 && (breakBefore & BREAK) !== 0 && source.charCodeAt(last) === 0x00AD ? breakBefore | SOFT_HYPHEN_BREAK : breakBefore
           last = i
         }
-        sourceBreaks[count] = sourceBreaks[source.length] ?? missing()
+        sourceBreaks[count] = sourceBreaks[source.length]!
         source = kept + source.slice(copied)
         normalized = collapseWhitespaceNormal(source)
       }
@@ -683,6 +685,7 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
 // atomic item as one U+FFFC, which is never scanned (removeItemsSkippableSegmentBreaks leaves
 // WebKit's text alone), so a scan takes an item's own text and nothing is cut out of the source
 // before the scans.
+/** @ensures result.length === source.length + 1 */
 function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, preserve: boolean, keepAll: boolean, language: string | null): Uint8Array {
   const { items, starts, atomic } = paragraph
   const breaks = new Uint8Array(source.length + 1)

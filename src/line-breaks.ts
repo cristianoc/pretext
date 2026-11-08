@@ -813,6 +813,7 @@ const SOFT_LINE_BREAK = 2
 // boundary that isn't next to a forced break. A U+2028 or U+2029 that starts an item
 // forces a break after it, marked FORCED_BREAK; one that ICU's fast-forward passed stays
 // inside a text item and doesn't.
+/** @ensures result.length === source.length + 1 */
 export function getWebKitLineBreaks(
   source: string,
   preserveNewlines: boolean,

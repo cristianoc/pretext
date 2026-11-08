@@ -653,6 +653,7 @@ function getBreakStates(line: LineData, text: string, is8bit: boolean, afterLead
 // with no advance (transformText).
 export type GeckoLineBreaks = { breaks: Uint8Array, leftOut: Uint8Array | null, dropsBidiControl: boolean }
 
+/** @ensures result.breaks.length === source.length + 1 */
 export function getGeckoLineBreaks(
   source: string,
   preserveWhiteSpace: boolean,
