@@ -12,7 +12,6 @@ export type PreparedSegments = PreparedLineData & { readonly segments: readonly 
 const graphemeEndCaches = new WeakMap<PreparedSegments, Map<number, Int32Array>>()
 
 // The offsets in a segment's text where its graphemes end, in order, then zeros.
-/** @requires safeInteger(segmentIndex) && 0 <= segmentIndex && segmentIndex < prepared.segments.length */
 export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number): Int32Array {
   let cache = graphemeEndCaches.get(prepared)
   if (cache === undefined) {
@@ -21,7 +20,8 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
   }
   let ends = cache.get(segmentIndex)
   if (ends === undefined) {
-    const segment = prepared.segments[segmentIndex]!
+    const segment = prepared.segments[segmentIndex]
+    if (segment === undefined) throw new RangeError('missing value')
     ends = new Int32Array(segment.length)
     findGraphemeEnds(getEngineProfile().graphemeTable, segment, 0, segment.length, ends)
     cache.set(segmentIndex, ends)

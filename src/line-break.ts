@@ -191,20 +191,13 @@ function getTabAdvance(position: number, tabStopAdvance: number, minimumAdvance:
 // (lineStartExtras): the other half is the end edge, which follows the item's text on the line.
 // Where the paragraph's items differ in letter spacing, a tab's width holds the gap after it, as
 // every segment's holds its own (src/rich-inline.ts); else it is 0.
-/**
- * @requires safeInteger(index) && 0 <= index && index < prepared.widths.length
- * @requires items.tabStopAdvances === null || index < items.tabStopAdvances.length
- * @requires items.minimumTabAdvances === null || index < items.minimumTabAdvances.length
- * @requires items.insideExtras === null || index < items.insideExtras.length
- */
 export function getItemTabAdvance(prepared: PreparedLineData, items: ParagraphSegmentData, index: number, lineWidth: number, appUnits: boolean): number {
-  const stopAdvance = items.tabStopAdvances === null ? prepared.tabStopAdvance : items.tabStopAdvances[index]!
-  const minimumAdvance = items.minimumTabAdvances === null ? prepared.minimumTabAdvance : items.minimumTabAdvances[index]!
-  const endEdge = items.insideExtras === null ? 0 : items.insideExtras[index]! / 2
-  return getTabAdvance(lineWidth - endEdge, stopAdvance, minimumAdvance, appUnits) + prepared.widths[index]!
+  const stopAdvance = items.tabStopAdvances === null ? prepared.tabStopAdvance : (items.tabStopAdvances[index] ?? missing())
+  const minimumAdvance = items.minimumTabAdvances === null ? prepared.minimumTabAdvance : (items.minimumTabAdvances[index] ?? missing())
+  const endEdge = items.insideExtras === null ? 0 : (items.insideExtras[index] ?? missing()) / 2
+  return getTabAdvance(lineWidth - endEdge, stopAdvance, minimumAdvance, appUnits) + (prepared.widths[index] ?? missing())
 }
 
-/** @requires safeInteger(endSegmentIndex) && 0 <= endSegmentIndex && endSegmentIndex <= prepared.widths.length && safeInteger(startSegmentIndex) */
 function getTerminalLetterSpacing(
   prepared: PreparedLineData,
   openingEdges: number[] | null,
@@ -436,8 +429,8 @@ function countSteppedLines(prepared: PreparedLineData, maxWidth: number): number
 // per run, so a long run costs one pass.
 function staysAfterObject(segmentFlags: Uint8Array, segmentCount: number, start: number, hangingKinds: number): boolean {
   let after = start + 1
-  while (after < segmentCount && (1 << (segmentFlags[after]! & KIND_BITS) & hangingKinds) !== 0) after++
-  return after === segmentCount || (segmentFlags[after]! & KIND_BITS) !== TAB
+  while (after < segmentCount && (1 << ((segmentFlags[after] ?? missing()) & KIND_BITS) & hangingKinds) !== 0) after++
+  return after === segmentCount || ((segmentFlags[after] ?? missing()) & KIND_BITS) !== TAB
 }
 
 // Whether a line that would end at the break before `breakSegmentIndex`, painting
@@ -447,10 +440,6 @@ function staysAfterObject(segmentFlags: Uint8Array, segmentCount: number, start:
 // by less than the overflow. Those are the soft hyphens the line passes, whose text the
 // engine shapes whole, and with `endKeepsJoin` the one the line ends at too
 // (EngineProfile, unfitHyphenRetreat).
-/**
- * @requires safeInteger(lineStartSegmentIndex) && safeInteger(breakSegmentIndex) && 0 <= lineStartSegmentIndex && 0 <= breakSegmentIndex && breakSegmentIndex <= prepared.widths.length && breakSegmentIndex <= prepared.segmentFlags.length
- * @requires prepared.discretionaryHyphenContexts === null || breakSegmentIndex <= prepared.discretionaryHyphenContexts.length
- */
 function returnsFromUnfitHyphen(
   prepared: PreparedLineData,
   lineStartSegmentIndex: number,

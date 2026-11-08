@@ -302,13 +302,12 @@ export type ParagraphLists = {
 // direction, where Safari measures the word alone (ENGINE_FOLLOWUPS.md, Bidi
 // levels, direction and script runs). Returns the zero-width breaks between the
 // text and the space, or null when the text takes no kerning.
-/** @requires safeInteger(analysisIndex) && safeInteger(to) && 0 <= analysisIndex && analysisIndex < to && to <= analysis.flags.length && to <= analysis.starts.length */
 function getFollowingSpaceTail(analysis: TextAnalysis, analysisIndex: number, to: number): string | null {
   const { normalized, spaceSources, starts, flags } = analysis
   let next = analysisIndex + 1
   while (next < to && (flags[next]! & KIND_BITS) === ZERO_WIDTH_BREAK) next++
   if (next >= to) return null
-  const nextKind = flags[next]! & KIND_BITS
+  const nextKind = (flags[next] ?? missing()) & KIND_BITS
   // A collapsed space's first source character: WebKit looks at the source after a text item.
   const spaceStart = starts[next]
   if (spaceStart === undefined) throw new RangeError('missing value')
@@ -708,7 +707,6 @@ export function measureAnalysis(
 // its kana takes the same in its advances (getSegmentFit). `widths` holds segments [from, to)
 // of the analysis from `base`, a rich-inline item's in its paragraph's, and `extras` holds
 // them from index 0; a kana that starts an item takes no kerning with the item before it.
-/** @requires safeInteger(from) && safeInteger(to) && 0 <= from && to <= analysis.flags.length && analysis.flags.length <= analysis.starts.length */
 function addKanaKerning(extras: number[] | null, widths: number[], base: number, analysis: TextAnalysis, from: number, to: number, measurement: FontMeasurement, kernings: Float64Array): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = from; i < to; i++) {
@@ -762,7 +760,6 @@ function addKanaKerning(extras: number[] | null, widths: number[], base: number,
 // the next item starts with, as the engines hang it wherever a line ends; a text's run before
 // a ZWSP, a soft hyphen or a character no line starts with doesn't yet (ENGINE_FOLLOWUPS.md,
 // Line edges).
-/** @requires safeInteger(from) && safeInteger(to) && 0 <= from && to <= analysis.flags.length && analysis.flags.length <= analysis.starts.length */
 function addIdeographicSpaceHangs(
   trims: number[] | null,
   analysis: TextAnalysis,

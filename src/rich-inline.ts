@@ -922,7 +922,6 @@ function findWholeLine(flow: InternalPreparedRichInline): InternalPreparedRichIn
 // Whether an item of the paragraph takes less than no room on a line: its segments' widths, with
 // the letter spacing after each one that takes it, add up to less than 0.
 /**
- * @requires data.widths.length <= data.segmentFlags.length
  * @requires forall i in itemSegments: safeInteger(itemSegments[i]) && 0 <= itemSegments[i] && itemSegments[i] <= data.widths.length
  */
 function narrowsLine(data: PreparedSegments, itemSegments: number[]): boolean {
@@ -977,7 +976,7 @@ function zeroList(count: number): number[] {
 // cloned end edge too (CanPlaceFrame, nsLineLayout.cpp:1217-1270).
 function getOpeningFit(flags: number[], from: number, to: number, extraWidth: number, afterTextSpaces: boolean, profile: EngineProfile): number {
   const fit = profile.paddedOpeningFit
-  const firstKind = flags[from]! & KIND_BITS
+  const firstKind = (flags[from] ?? missing()) & KIND_BITS
   const opensWithWhiteSpace = firstKind === PRESERVED_SPACE || (firstKind === TAB && profile.hangTabs)
   const opensWithBreak = firstKind === HARD_BREAK || firstKind === ZERO_WIDTH_BREAK
   let whiteSpaceEnd = from
@@ -994,7 +993,6 @@ function getOpeningFit(flags: number[], from: number, to: number, extraWidth: nu
 // starts or ends inside its first and its last segment only. Where they start the line
 // (`startsLine`), the first of them adds what a line that starts with it does
 // (breakableLineStartExtras), as the walker's line does.
-/** @requires safeInteger(i) && 0 <= i && i < data.widths.length && safeInteger(from) && 0 <= from */
 function getPartWidth(data: PreparedSegments, i: number, from: number, to: number, startsLine: boolean): number {
   const { breakableFitAdvances, breakableLineStartExtras, letterSpacing, items } = data
   const advances = breakableFitAdvances[i]
@@ -1244,7 +1242,7 @@ export function layoutNextRichInlineLineRange(
 function getSourceUnits(offsets: Int32Array, from: number, to: number, itemStart: number): number[] | null {
   if (to <= from || offsets[to - 1]! - offsets[from]! === to - 1 - from) return null
   const units: number[] = []
-  for (let unit = from; unit < to; unit++) units.push(offsets[unit]! - itemStart)
+  for (let unit = from; unit < to; unit++) units.push((offsets[unit] ?? missing()) - itemStart)
   return units
 }
 
@@ -1333,7 +1331,7 @@ export function materializeRichInlineLineRange(
     if (startGraphemeIndex > 0 && startSegmentIndex < itemEnd) sourceStart = getSourceOffset(sourceStarts, sourceUnits, startSegmentIndex, getGraphemeStart(data, startSegmentIndex, startGraphemeIndex))
     let sourceEnd = sourceStart
     if (endGraphemeIndex > 0) sourceEnd = getSourceOffset(sourceStarts, sourceUnits, endSegmentIndex, getGraphemeStart(data, endSegmentIndex, endGraphemeIndex) - 1) + 1
-    else if (endSegmentIndex > startSegmentIndex) sourceEnd = (sourceEnds ?? missing())[endSegmentIndex - 1]!
+    else if (endSegmentIndex > startSegmentIndex) sourceEnd = (sourceEnds ?? missing())[endSegmentIndex - 1] ?? missing()
     const materialized: InternalRichInlineFragment = {
       itemIndex: fragment.itemIndex,
       text: endsLine ? buildLineTextFromRange(data, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex)
