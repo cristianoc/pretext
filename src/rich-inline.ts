@@ -765,12 +765,11 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 // a soft hyphen of that item: for one inside an earlier item Blink asks only that the line fit
 // (:4138-4158), and this leaves room for that item's hyphen (ENGINE_FOLLOWUPS.md, Rich-inline item
 // edges).
-/** @requires forall i in segmentItems: safeInteger(segmentItems[i]) && 0 <= segmentItems[i] && segmentItems[i] < hyphenWidths.length */
 function getHyphenRooms(hyphenWidths: number[], itemSegments: number[], segmentItems: Int32Array): number[] {
   const rooms: number[] = []
   for (let i = 0; i < segmentItems.length; i++) {
     const index = segmentItems[i]!
-    rooms.push(i === itemSegments[index] ? 0 : hyphenWidths[index]!)
+    rooms.push(i === itemSegments[index] ? 0 : (hyphenWidths[index] ?? missing()))
   }
   rooms.push(0)
   return rooms
@@ -1286,16 +1285,12 @@ function findSegmentSources(flow: InternalPreparedRichInline): TextSources {
 }
 
 // Where unit `unit` of a segment's text is in its item's text.
-/**
- * @requires safeInteger(segmentIndex) && 0 <= segmentIndex && segmentIndex < sourceStarts.length
- * @requires sourceUnits === null || segmentIndex < sourceUnits.length
- */
 function getSourceOffset(sourceStarts: number[], sourceUnits: (number[] | null)[] | null, segmentIndex: number, unit: number): number {
   const units = sourceUnits === null ? null : sourceUnits[segmentIndex]
   if (units === undefined) throw new RangeError('missing value')
-  if (units === null) return sourceStarts[segmentIndex]! + unit
+  if (units === null) return (sourceStarts[segmentIndex] ?? missing()) + unit
   // The segment's end, where a grapheme start past its last grapheme stops: just past its last unit.
-  return units[unit] ?? (units.length > 0 ? units[units.length - 1]! + 1 : sourceStarts[segmentIndex]!)
+  return units[unit] ?? (units.length > 0 ? units[units.length - 1]! + 1 : (sourceStarts[segmentIndex] ?? missing()))
 }
 
 // Bridge from cheap range walking to full fragment text. Lets callers do
