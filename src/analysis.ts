@@ -418,38 +418,23 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // zero-width break (classifySegmentUnit) is left as it was.
   let hasUnbroken = false
   const count = flags.length
+  /** @invariant safeInteger(j) && safeInteger(count) && j + 2 <= count && count === flags.length */
   for (let j = count - 2; j >= 0; j--) {
-    const kind = (flags[j] ?? missing()) & KIND_BITS
-    const next = (flags[j + 1] ?? missing()) & KIND_BITS
+    const kind = flags[j]! & KIND_BITS
+    const next = flags[j + 1]! & KIND_BITS
     if (((breaks[(starts[j + 1] ?? missing())] ?? missing()) & BREAK) !== 0 || kind === HARD_BREAK) continue
     if (!hangTabs && (next === TAB || (next === PRESERVED_SPACE && kind === TAB))) {
       if (kind === SOFT_HYPHEN) continue
     } else if (next === TEXT || next === ZERO_WIDTH_GLUE || next === CONTROL) {
-      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) {
-        const flagsValue = (flags[j] ?? missing()) & ~KIND_BITS | ZERO_WIDTH_GLUE
-        if ((j & 0x7fffffff) !== j || j > flags.length) throw new RangeError('index')
-        flags[j] = flagsValue
-      }
+      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) flags[j] = flags[j]! & ~KIND_BITS | ZERO_WIDTH_GLUE
     } else {
-      if (next === ZERO_WIDTH_BREAK && kind === ZERO_WIDTH_BREAK && normalized.charCodeAt(starts[j + 1] ?? missing()) === 0x200B) {
-        const idx = j + 1
-        const flagsValue = (flags[idx] ?? missing()) | UNBROKEN
-        if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
-        flags[idx] = flagsValue
-      }
+      if (next === ZERO_WIDTH_BREAK && kind === ZERO_WIDTH_BREAK && normalized.charCodeAt(starts[j + 1] ?? missing()) === 0x200B) flags[j + 1] = flags[j + 1]! | UNBROKEN
       continue
     }
-    const idx = j + 1
-    const flagsValue = (flags[idx] ?? missing()) | UNBROKEN
-    if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
-    flags[idx] = flagsValue
+    flags[j + 1] = flags[j + 1]! | UNBROKEN
     hasUnbroken = true
   }
-  if (hasUnbroken) for (let j = 0; j < count; j++) if (((flags[j] ?? missing()) & UNBROKEN) === 0) {
-    const flagsValue = (flags[j] ?? missing()) | RETURNABLE
-    if ((j & 0x7fffffff) !== j || j > flags.length) throw new RangeError('index')
-    flags[j] = flagsValue
-  }
+  if (hasUnbroken) for (let j = 0; j < count; j++) if ((flags[j]! & UNBROKEN) === 0) flags[j] = flags[j]! | RETURNABLE
   // Each segment's text, sliced once here for measurement and the neighbours it reads: sliced
   // where measurement reads it, Firefox's rich-inline preparation ran 11-19% slower (RESEARCH.md,
   // Keeping Work Bounded).
