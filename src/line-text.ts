@@ -1,4 +1,3 @@
-import { missing } from './checked.js'
 import { findGraphemeEnds } from './graphemes.js'
 import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
 import { isDiscretionaryLineEnd, type PreparedLineData } from './line-break.js'
@@ -12,6 +11,7 @@ export type PreparedSegments = PreparedLineData & { readonly segments: readonly 
 const graphemeEndCaches = new WeakMap<PreparedSegments, Map<number, Int32Array>>()
 
 // The offsets in a segment's text where its graphemes end, in order, then zeros.
+/** @requires safeInteger(segmentIndex) && 0 <= segmentIndex && segmentIndex < prepared.segments.length */
 export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number): Int32Array {
   let cache = graphemeEndCaches.get(prepared)
   if (cache === undefined) {
@@ -20,8 +20,7 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
   }
   let ends = cache.get(segmentIndex)
   if (ends === undefined) {
-    const segment = prepared.segments[segmentIndex]
-    if (segment === undefined) throw new RangeError('missing value')
+    const segment = prepared.segments[segmentIndex]!
     ends = new Int32Array(segment.length)
     findGraphemeEnds(getEngineProfile().graphemeTable, segment, 0, segment.length, ends)
     cache.set(segmentIndex, ends)
@@ -31,7 +30,8 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
 
 // Where grapheme `graphemeIndex` of a segment starts in its text: its end past its last grapheme,
 // where a range kept from a longer text stops.
-function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, graphemeIndex: number): number {
+/** @requires safeInteger(segmentIndex) && 0 <= segmentIndex && segmentIndex < prepared.segments.length */
+export function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, graphemeIndex: number): number {
   if (graphemeIndex <= 0) return 0
   const ends = getGraphemeEnds(prepared, segmentIndex)
   const end = ends[graphemeIndex - 1] ?? 0
@@ -40,6 +40,7 @@ function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, grap
 
 // The text of a range of `prepared`'s segments, with no hyphen: that of a rich-inline fragment its
 // line goes on after.
+/** @requires safeInteger(startSegmentIndex) && 0 <= startSegmentIndex */
 export function buildRangeText(
   prepared: PreparedSegments,
   startSegmentIndex: number,
@@ -56,20 +57,20 @@ export function buildRangeText(
   for (let i = startSegmentIndex; i < segmentEnd; i++) {
     // A soft hyphen shows only as the hyphen of a line that ends at it, and one the
     // Gecko scan takes as a zero-width break never does.
-    const kind = (segmentFlags[i] ?? missing()) & KIND_BITS
+    const kind = segmentFlags[i]! & KIND_BITS
     if (
       kind === SOFT_HYPHEN || kind === HARD_BREAK ||
-      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && (prepared.segments[i] ?? missing()).charCodeAt(0) === 0x00AD)
+      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && prepared.segments[i]!.charCodeAt(0) === 0x00AD)
     ) continue
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
-      text += (prepared.segments[i] ?? missing()).slice(getGraphemeStart(prepared, i, startGraphemeIndex))
+      text += prepared.segments[i]!.slice(getGraphemeStart(prepared, i, startGraphemeIndex))
     } else {
-      text += (prepared.segments[i] ?? missing())
+      text += prepared.segments[i]!
     }
   }
 
   if (endGraphemeIndex > 0 && endSegmentIndex < segmentCount) {
-    text += (prepared.segments[endSegmentIndex] ?? missing()).slice(
+    text += prepared.segments[endSegmentIndex]!.slice(
       getGraphemeStart(prepared, endSegmentIndex, startSegmentIndex === endSegmentIndex ? startGraphemeIndex : 0),
       getGraphemeStart(prepared, endSegmentIndex, endGraphemeIndex),
     )

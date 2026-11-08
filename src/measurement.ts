@@ -515,11 +515,10 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
     // Keywords with the same entry share its family, and the context is asked once.
     const first = row.indexOf(row[i]!)
     if (first < i) {
-      families.push(families[first] ?? missing())
+      families.push(families[first]!)
       continue
     }
-    const name = webkitGenericFamilyNames[row[i]!]
-    if (name === undefined) throw new RangeError('missing value')
+    const name = webkitGenericFamilyNames[row[i]!]!
     const pair = name.indexOf('|')
     const family = pair < 0 ? name : hasFamily(ctx, name.slice(0, pair)) ? name.slice(0, pair) : name.slice(pair + 1)
     families.push(family === '' ? '' : `"${family}"`)
@@ -689,8 +688,7 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
   let extras = noExtraSpacings
   try {
     let before = 0
-    for (let i = 0; i < count; i++) {
-      const start = i === 0 ? 0 : (ends[i - 1] ?? missing())
+    for (let i = 0, start = 0; i < count; start = ends[i++]!) {
       const text = seg.slice(prefixes ? 0 : start, ends[i])
       let glyphs = counts.get(text)
       if (glyphs === undefined) {
@@ -705,9 +703,7 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
       before = glyphs
       if (extra === 0 && extras.length === 0) continue
       if (extras.length === 0) extras = zeros(count)
-      const extrasStore = extras
-      if ((i & 0x7fffffff) !== i || i > extrasStore.length) throw new RangeError('index')
-      extrasStore[i] = extra
+      extras[i] = extra
     }
   } finally {
     if (context !== null) context.letterSpacing = measurement.letterSpacing
@@ -951,8 +947,7 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
     if (code >= 0x2e80 && !isCanvasWordLetter(code)) return 0
   }
   const index = (first - 0x3041) * KANA_COUNT + second - 0x3041
-  const kerning = kernings[index]
-  if (kerning === undefined) throw new RangeError('missing value')
+  const kerning = kernings[index]!
   return Number.isNaN(kerning) ? kernings[index] = measureKanaKerning(text.slice(at - 1, at + 1), measurement) : kerning
 }
 
@@ -960,7 +955,7 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
 // whole, less each alone.
 function measureKanaKerning(pair: string, measurement: FontMeasurement): number {
   const pairWidth = getWholeRunContext(measurement).measureText(pair).width
-  const kerning = pairWidth - getSegmentMetrics(pair[0] ?? missing(), measurement).width - getSegmentMetrics(pair[1] ?? missing(), measurement).width
+  const kerning = pairWidth - getSegmentMetrics(pair[0]!, measurement).width - getSegmentMetrics(pair[1]!, measurement).width
   // As for a character and a space, up to the pair's width / 2^22 is rounding.
   return Math.abs(kerning) <= pairWidth / 0x400000 ? 0 : kerning
 }
@@ -1187,7 +1182,7 @@ function countEmojiGlyphs(text: string, measurement: FontMeasurement): number {
   const ends = new Int32Array(text.length)
   const graphemeCount = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)
   let count = 0
-  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++] ?? missing()) {
+  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++]!) {
     const grapheme = text.slice(start, ends[i])
     if (!emojiGraphemeRe.test(grapheme)) continue
     for (const stretch of (grapheme.match(emojiStretchRe) ?? missing())) count += getEmojiGlyphs(stretch, measurement)
@@ -1238,7 +1233,7 @@ export function getSegmentFit(
       pairs = count > MAX_PREFIX_FIT_GRAPHEMES || addUpTo(advances, width)
       if (!pairs) advances = measureFitAdvances(seg, ends, count, 'segment-prefixes', metrics, measurement, emojiCorrection, followingSpaceWidth)
       lineStartExtras = [0]
-      for (let i = 1; i < count; i++) lineStartExtras.push((alone[i] ?? missing()) - (advances[i] ?? missing()))
+      for (let i = 1; i < count; i++) lineStartExtras.push(alone[i]! - advances[i]!)
     }
   } else {
     // Past MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
@@ -1259,23 +1254,13 @@ export function getSegmentFit(
     const kernings = getFontKanaKerning(measurement)
     if (kernings !== null) {
       for (let g = 1; g < count; g++) {
-        const kerning = getKanaKerning(seg, pairs && g > 1 ? (ends[g - 2] ?? missing()) : 0, ends[g - 1] ?? missing(), measurement, kernings)
+        const kerning = getKanaKerning(seg, pairs && g > 1 ? ends[g - 2]! : 0, ends[g - 1]!, measurement, kernings)
         if (kerning > 0) {
-          const idx = g - 1
-          const advancesStore = advances
-          const advancesValue = (advancesStore[idx] ?? missing()) + kerning
-          if ((idx & 0x7fffffff) !== idx || idx > advancesStore.length) throw new RangeError('index')
-          advancesStore[idx] = advancesValue
+          advances[g - 1] = advances[g - 1]! + kerning
         } else if (kerning < 0) {
-          const advancesStore = advances
-          const advancesValue = (advancesStore[g] ?? missing()) + kerning
-          if ((g & 0x7fffffff) !== g || g > advancesStore.length) throw new RangeError('index')
-          advancesStore[g] = advancesValue
+          advances[g] = advances[g]! + kerning
           lineStartExtras ??= zeros(count)
-          const lineStartExtrasStore = lineStartExtras
-          const lineStartExtrasValue = (lineStartExtrasStore[g] ?? missing()) - kerning
-          if ((g & 0x7fffffff) !== g || g > lineStartExtrasStore.length) throw new RangeError('index')
-          lineStartExtrasStore[g] = lineStartExtrasValue
+          lineStartExtras[g] = lineStartExtras[g]! - kerning
         }
       }
     }
@@ -1299,14 +1284,10 @@ function countLigaturesOnFirstLetter(seg: string, ends: Int32Array, advances: nu
   // The grapheme the ligature that holds the grapheme before this one starts with, or that grapheme.
   let first = 0
   for (let i = 1; i < advances.length; i++) {
-    const start = ends[i - 1]
-    if (start === undefined) throw new RangeError('missing value')
+    const start = ends[i - 1]!
     const alone = getTextWidth(seg.slice(start, ends[i]), measurement, emojiCorrection)
-    if (Math.round(((advances[i] ?? missing()) - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : (ends[i - 2] ?? missing()), ends[i]), measurement)) {
-      const advancesValue = (advances[first] ?? missing()) + (advances[i] ?? missing())
-      if ((first & 0x7fffffff) !== first || first > advances.length) throw new RangeError('index')
-      advances[first] = advancesValue
-      if ((i & 0x7fffffff) !== i || i > advances.length) throw new RangeError('index')
+    if (Math.round((advances[i]! - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : ends[i - 2]!, ends[i]), measurement)) {
+      advances[first] = advances[first]! + advances[i]!
       advances[i] = 0
     } else {
       first = i
@@ -1355,9 +1336,8 @@ function measureFitAdvances(
   const advances: number[] = []
   let previousStart = 0
   let previousWidth = 0
-  for (let i = 0, start = 0; i < count; start = ends[i++] ?? missing()) {
-    const end = ends[i]
-    if (end === undefined) throw new RangeError('missing value')
+  for (let i = 0, start = 0; i < count; start = ends[i++]!) {
+    const end = ends[i]!
     if (prefixes) {
       // The whole segment is the last prefix; with a following space it was
       // measured together with that space.
@@ -1376,10 +1356,7 @@ function measureFitAdvances(
   // Advances that do not end in the whole segment's width take the kerning as a
   // difference, which needs the segment measured alone too.
   if (followingSpaceWidth !== null && !prefixes) {
-    const idx = count - 1
-    const advancesValue = (advances[idx] ?? missing()) + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
-    if ((idx & 0x7fffffff) !== idx || idx > advances.length) throw new RangeError('index')
-    advances[idx] = advancesValue
+    advances[count - 1] = advances[count - 1]! + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
   }
   return advances
 }

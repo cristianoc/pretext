@@ -8,7 +8,6 @@
 // Browser measurement limitations are documented in README.md and PLATFORM_BUGS.md.
 // Based on Sebastian Markbage's text-layout research (github.com/chenglou/text-layout).
 
-import { missing } from './checked.js'
 import { clearWordSegmenter } from './line-breaks.js'
 import {
   analyzeText,
@@ -139,7 +138,7 @@ export function prepareWithSegments(text: string, font: string, options?: Prepar
   const prepared = prepareInternal(text, font, segments, options)
   // Each segment's kind by name, from its flags.
   const kinds: SegmentBreakKind[] = []
-  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS] ?? missing())
+  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS]!)
   return { ...prepared, segments, kinds }
 }
 
