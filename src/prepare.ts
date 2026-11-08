@@ -219,14 +219,11 @@ function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
 // space that has one script names that run, so the search back starts before the space, at
 // text[at - 2], and ends there; a closing bracket, or a character of several scripts, takes its
 // script from the runs before it, which are then read.
-/** @requires safeInteger(at) && 0 <= at && at < text.length && safeInteger(end) && end <= text.length */
 function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: number): boolean {
   let scripts = getScriptFactsAt(text, at) & ANY_SCRIPT
   // A default ignorable with a script of its own, as U+3164, counts as the word's first letter.
-  /** @invariant safeInteger(first) && 0 <= first && first < text.length */
   for (let first = at; scripts === ANY_SCRIPT && first + 1 < end && hasProperty(text.charCodeAt(first), DEFAULT_IGNORABLE); first++) scripts = getScriptFactsAt(text, first + 1) & ANY_SCRIPT
   if (scripts === ANY_SCRIPT) return true
-  /** @invariant safeInteger(i) && i < text.length */
   for (let i = at - 2; i >= 0; i--) {
     if ((text.charCodeAt(i) & 0xFC00) === 0xDC00 && i > 0) i--
     const facts = getScriptFactsAt(text, i)
@@ -305,7 +302,7 @@ export type ParagraphLists = {
 function getFollowingSpaceTail(analysis: TextAnalysis, analysisIndex: number, to: number): string | null {
   const { normalized, spaceSources, starts, flags } = analysis
   let next = analysisIndex + 1
-  while (next < to && (flags[next]! & KIND_BITS) === ZERO_WIDTH_BREAK) next++
+  while (next < to && ((flags[next] ?? missing()) & KIND_BITS) === ZERO_WIDTH_BREAK) next++
   if (next >= to) return null
   const nextKind = (flags[next] ?? missing()) & KIND_BITS
   // A collapsed space's first source character: WebKit looks at the source after a text item.
@@ -328,14 +325,14 @@ function getTailKerning(item: string, measurement: FontMeasurement, spaceWidth: 
 // A line counts it for the soft hyphens it passes, and in Gecko for the one it
 // ends at (returnsFromUnfitHyphen in src/line-break.ts). WebKit's return fits each
 // side as measured alone and takes none (unfitHyphenRetreat).
-/** @requires safeInteger(analysisIndex) && safeInteger(to) && 0 <= analysisIndex && analysisIndex < to && to <= analysis.flags.length && to <= analysis.texts.length */
 function getJoinedNarrowing(analysis: TextAnalysis, analysisIndex: number, to: number, before: string | null, beforeMetrics: SegmentMetrics | null, measurement: FontMeasurement, emojiCorrection: number, lineFitEpsilon: number): number {
   if (before === null) return 0
   const { texts, flags } = analysis
   let next = analysisIndex + 1
-  while (next < to && (flags[next]! & KIND_BITS) === SOFT_HYPHEN) next++
-  if (next >= to || (flags[next]! & KIND_BITS) !== TEXT) return 0
-  const after = texts[next]!
+  while (next < to && ((flags[next] ?? missing()) & KIND_BITS) === SOFT_HYPHEN) next++
+  if (next >= to || ((flags[next] ?? missing()) & KIND_BITS) !== TEXT) return 0
+  const after = texts[next]
+  if (after === undefined) throw new RangeError('missing value')
   const apart = getCorrectedSegmentWidth(before, beforeMetrics ?? missing(), measurement, emojiCorrection) + getTextWidth(after, measurement, emojiCorrection)
   const together = getTextWidth(before + after, measurement, emojiCorrection)
   return apart - together > lineFitEpsilon ? apart - together : 0

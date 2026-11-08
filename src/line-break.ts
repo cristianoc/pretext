@@ -450,11 +450,11 @@ function returnsFromUnfitHyphen(
 ): boolean {
   const { discretionaryHyphenContexts, segmentFlags } = prepared
   const softHyphenIndex = breakSegmentIndex - 1
-  if (softHyphenIndex < lineStartSegmentIndex || (segmentFlags[softHyphenIndex]! & KIND_BITS) !== SOFT_HYPHEN || breakWidth <= fitLimit) return false
+  if (softHyphenIndex < lineStartSegmentIndex || ((segmentFlags[softHyphenIndex] ?? missing()) & KIND_BITS) !== SOFT_HYPHEN || breakWidth <= fitLimit) return false
   const overflow = breakWidth - fitLimit
   let narrowing = 0
   const last = endKeepsJoin ? softHyphenIndex : softHyphenIndex - 1
-  if (discretionaryHyphenContexts !== null) for (let i = lineStartSegmentIndex; i <= last; i++) narrowing += discretionaryHyphenContexts[i]!
+  if (discretionaryHyphenContexts !== null) for (let i = lineStartSegmentIndex; i <= last; i++) narrowing += (discretionaryHyphenContexts[i] ?? missing())
   return narrowing < overflow
 }
 
