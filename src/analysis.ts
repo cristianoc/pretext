@@ -675,7 +675,7 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
   const offsets = paragraph.sourceOffsets = alignToSource(text, normalized, scan)
   const { starts, atomic } = paragraph
   for (let k = 0, j = 0; k < starts.length; k++) {
-    while (j < normalized.length && (offsets[j] ?? missing()) < (starts[k] ?? missing())) j++
+    while (j < normalized.length && (offsets[j] ?? missing()) < starts[k]!) j++
     if (j === normalized.length) break
     breaks[j] = (breaks[j] ?? missing()) | ITEM_START
     if (atomic[k] && offsets[j] === starts[k]) {
