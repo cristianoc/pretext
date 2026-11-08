@@ -518,7 +518,8 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
       families.push(families[first] ?? missing())
       continue
     }
-    const name = webkitGenericFamilyNames[row[i]!]!
+    const name = webkitGenericFamilyNames[row[i]!]
+    if (name === undefined) throw new RangeError('missing value')
     const pair = name.indexOf('|')
     const family = pair < 0 ? name : hasFamily(ctx, name.slice(0, pair)) ? name.slice(0, pair) : name.slice(pair + 1)
     families.push(family === '' ? '' : `"${family}"`)
@@ -688,7 +689,8 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
   let extras = noExtraSpacings
   try {
     let before = 0
-    for (let i = 0, start = 0; i < count; start = ends[i++]!) {
+    for (let i = 0; i < count; i++) {
+      const start = i === 0 ? 0 : (ends[i - 1] ?? missing())
       const text = seg.slice(prefixes ? 0 : start, ends[i])
       let glyphs = counts.get(text)
       if (glyphs === undefined) {
@@ -1257,13 +1259,23 @@ export function getSegmentFit(
     const kernings = getFontKanaKerning(measurement)
     if (kernings !== null) {
       for (let g = 1; g < count; g++) {
-        const kerning = getKanaKerning(seg, pairs && g > 1 ? ends[g - 2]! : 0, ends[g - 1]!, measurement, kernings)
+        const kerning = getKanaKerning(seg, pairs && g > 1 ? (ends[g - 2] ?? missing()) : 0, ends[g - 1] ?? missing(), measurement, kernings)
         if (kerning > 0) {
-          advances[g - 1] = advances[g - 1]! + kerning
+          const idx = g - 1
+          const advancesStore = advances
+          const advancesValue = (advancesStore[idx] ?? missing()) + kerning
+          if ((idx & 0x7fffffff) !== idx || idx > advancesStore.length) throw new RangeError('index')
+          advancesStore[idx] = advancesValue
         } else if (kerning < 0) {
-          advances[g] = advances[g]! + kerning
+          const advancesStore = advances
+          const advancesValue = (advancesStore[g] ?? missing()) + kerning
+          if ((g & 0x7fffffff) !== g || g > advancesStore.length) throw new RangeError('index')
+          advancesStore[g] = advancesValue
           lineStartExtras ??= zeros(count)
-          lineStartExtras[g] = lineStartExtras[g]! - kerning
+          const lineStartExtrasStore = lineStartExtras
+          const lineStartExtrasValue = (lineStartExtrasStore[g] ?? missing()) - kerning
+          if ((g & 0x7fffffff) !== g || g > lineStartExtrasStore.length) throw new RangeError('index')
+          lineStartExtrasStore[g] = lineStartExtrasValue
         }
       }
     }
@@ -1287,10 +1299,14 @@ function countLigaturesOnFirstLetter(seg: string, ends: Int32Array, advances: nu
   // The grapheme the ligature that holds the grapheme before this one starts with, or that grapheme.
   let first = 0
   for (let i = 1; i < advances.length; i++) {
-    const start = ends[i - 1]!
+    const start = ends[i - 1]
+    if (start === undefined) throw new RangeError('missing value')
     const alone = getTextWidth(seg.slice(start, ends[i]), measurement, emojiCorrection)
-    if (Math.round((advances[i]! - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : ends[i - 2]!, ends[i]), measurement)) {
-      advances[first] = advances[first]! + advances[i]!
+    if (Math.round(((advances[i] ?? missing()) - alone) * 60) !== 0 && isLigature(seg.slice(i === 1 ? 0 : (ends[i - 2] ?? missing()), ends[i]), measurement)) {
+      const advancesValue = (advances[first] ?? missing()) + (advances[i] ?? missing())
+      if ((first & 0x7fffffff) !== first || first > advances.length) throw new RangeError('index')
+      advances[first] = advancesValue
+      if ((i & 0x7fffffff) !== i || i > advances.length) throw new RangeError('index')
       advances[i] = 0
     } else {
       first = i
@@ -1360,7 +1376,10 @@ function measureFitAdvances(
   // Advances that do not end in the whole segment's width take the kerning as a
   // difference, which needs the segment measured alone too.
   if (followingSpaceWidth !== null && !prefixes) {
-    advances[count - 1] = advances[count - 1]! + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
+    const idx = count - 1
+    const advancesValue = (advances[idx] ?? missing()) + metrics.width - getSegmentMetrics(seg, measurement).width - followingSpaceWidth
+    if ((idx & 0x7fffffff) !== idx || idx > advances.length) throw new RangeError('index')
+    advances[idx] = advancesValue
   }
   return advances
 }

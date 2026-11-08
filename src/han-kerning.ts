@@ -139,11 +139,11 @@ function getFontData(measurement: FontMeasurement): HanKerningFontData | null {
     for (let i = from + 1; i < to; i++) {
       if ((glyphs[i] ?? missing()).advance !== (glyphs[from] ?? missing()).advance || (glyphs[i] ?? missing()).type !== (glyphs[from] ?? missing()).type) return OTHER
     }
-    return glyphs[from]!.type
+    return (glyphs[from] ?? missing()).type
   }
   data.typeForDot = group(0, 4)
-  data.typeForColon = glyphs[4]!.type
-  data.typeForSemicolon = glyphs[5]!.type
+  data.typeForColon = (glyphs[4] ?? missing()).type
+  data.typeForSemicolon = (glyphs[5] ?? missing()).type
   data.quoteFullwidth = group(6, 8) === OPEN && group(8, 10) === CLOSE
   measurement.hanKerning = data
   return data
@@ -215,14 +215,18 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     widthTrimsStore[idx] = widthTrimsValue
   }
   for (let i = from; i < to; i++) {
-    if ((flags[i]! & KIND_BITS) !== TEXT) continue
-    const start = starts[i]!
-    const end = i + 1 < count ? starts[i + 1]! : normalized.length
+    if (((flags[i] ?? missing()) & KIND_BITS) !== TEXT) continue
+    const start = starts[i]
+    if (start === undefined) throw new RangeError('missing value')
+    const end = i + 1 < count ? (starts[i + 1] ?? missing()) : normalized.length
     const first = normalized.charCodeAt(start)
     if (i > 0 && maybeHanKerns(first) && haltedSide(getCharType(data, normalized, start - 1), getCharType(data, normalized, start)) === 1) {
       const trim = getTrim(data, first, measurement)
       out.lineStartExtras ??= zeros(to - from)
-      out.lineStartExtras[i - from] = trim
+      const idx = i - from
+      const lineStartExtrasStore = out.lineStartExtras
+      if ((idx & 0x7fffffff) !== idx || idx > lineStartExtrasStore.length) throw new RangeError('index')
+      lineStartExtrasStore[idx] = trim
       addWidthTrim(i, trim)
     }
     for (let k = start + 1; k < end; k++) {
@@ -246,12 +250,20 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
     const lastType = getStaticCharType(normalized, end - 1)
     if ((lastType !== CLOSE && lastType !== CLOSE_QUOTE) || getCharType(data, normalized, end - 1) !== CLOSE) continue
     // A break directly after the segment: text after a break, or the end of the text.
-    if (atEnd || ((flags[i + 1]! & KIND_BITS) === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) {
+    if (atEnd || (((flags[i + 1] ?? missing()) & KIND_BITS) === TEXT && ((flags[i + 1] ?? missing()) & UNBROKEN) === 0)) {
       out.lineEndTrims ??= zeros(to - from)
-      out.lineEndTrims[i - from] = getTrim(data, last, measurement)
+      const idx = i - from
+      const lineEndTrimsStore = out.lineEndTrims
+      const lineEndTrimsValue = getTrim(data, last, measurement)
+      if ((idx & 0x7fffffff) !== idx || idx > lineEndTrimsStore.length) throw new RangeError('index')
+      lineEndTrimsStore[idx] = lineEndTrimsValue
     } else {
       out.overflowLineEndTrims ??= zeros(to - from)
-      out.overflowLineEndTrims[i - from] = getTrim(data, last, measurement)
+      const idx = i - from
+      const overflowLineEndTrimsStore = out.overflowLineEndTrims
+      const overflowLineEndTrimsValue = getTrim(data, last, measurement)
+      if ((idx & 0x7fffffff) !== idx || idx > overflowLineEndTrimsStore.length) throw new RangeError('index')
+      overflowLineEndTrimsStore[idx] = overflowLineEndTrimsValue
     }
   }
   return out

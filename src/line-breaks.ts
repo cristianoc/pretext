@@ -155,7 +155,7 @@ export function unpackClassRuns(runs: Int32Array, remap: Uint8Array, blocks: num
   for (let r = 0; r <= runs.length; r += 2) {
     // Runs of joint classes that are one class in this map make one run, [c, end), written once
     // the next run's class differs or no run is left.
-    const following = r < runs.length ? remap[runs[r + 1]!]! : -1
+    const following = r < runs.length ? (remap[(runs[r + 1] ?? missing())] ?? missing()) : -1
     if (following !== value) {
       while (c < end) {
         const block = c >> 8
@@ -164,20 +164,20 @@ export function unpackClassRuns(runs: Int32Array, remap: Uint8Array, blocks: num
             whole[value] = count
             values.fill(value, count << 8, ++count << 8)
           }
-          index.fill(whole[value]!, block, end >> 8)
+          index.fill(whole[value] ?? missing(), block, end >> 8)
           c = end & ~0xff
         } else {
           // A block that several runs share is its own: the first of them starts it.
           if ((c & 0xff) === 0) index[block] = count++
           const stop = Math.min(end, (block + 1) << 8)
-          const shift = (index[block]! - block) << 8
+          const shift = ((index[block] ?? missing()) - block) << 8
           values.fill(value, c + shift, stop + shift)
           c = stop
         }
       }
       value = following
     }
-    if (r < runs.length) end += runs[r]! + 1
+    if (r < runs.length) end += (runs[r] ?? missing()) + 1
   }
   if (end !== 0x110000) throw new Error('The class runs don\'t cover U+0000..U+10FFFF')
   return { index, values }
@@ -229,7 +229,7 @@ const astralProperties = new Map<number, number>()
 export function hasProperty(cp: number, property: number): boolean {
   const bmp = bmpProperties ??= new Uint16Array(0x10000)
   const has = 1 << (property * 2)
-  let bits = cp < 0x10000 ? bmp[cp]! : astralProperties.get(cp) ?? 0
+  let bits = cp < 0x10000 ? (bmp[cp] ?? missing()) : astralProperties.get(cp) ?? 0
   if ((bits & has << 1) === 0) {
     bits |= has << 1 | ((PROPERTY_TESTS[property] ?? missing())().test(String.fromCodePoint(cp)) ? has : 0)
     if (cp < 0x10000) bmp[cp] = bits
@@ -280,8 +280,8 @@ export function unpackStateRows(width: number, states: number, base: Uint16Array
   const rows = new Uint16Array(states * width)
   if (base !== null) rows.set(base)
   for (let i = 0, row = -width; i < differences.length;) {
-    row += (differences[i++]! + 1) * width
-    const back = differences[i++]! * width
+    row += ((differences[i++] ?? missing()) + 1) * width
+    const back = (differences[i++] ?? missing()) * width
     if (back > 0) rows.copyWithin(row, row - back, row - back + width)
     let at = row - 1
     for (let n = differences[i++] ?? missing(); n > 0; n--) {
@@ -358,17 +358,19 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
       } else { // rbbi.cpp:850-855, with Apple's overrides (apple-rbbi.cpp:1061-1084)
         let overridden = false
         for (let i = 0; i < overrideCount; i++) {
-          if (c === overrideChars[i]) { category = overrides.categories[i]!; overridden = true; break }
+          if (c === overrideChars[i]) { category = overrides.categories[i] ?? missing(); overridden = true; break }
         }
         if (!overridden) {
           category = getClass(r.classes, c)
           if (category >= dictionaryStart) dictionaryCharCount++
         }
       }
-      const state = rows[row + 3 + category]! // rbbi.cpp:874-877
+      const state = rows[row + 3 + category] // rbbi.cpp:874-877
+      if (state === undefined) throw new RangeError('missing value')
       row = state * width
 
-      const accepting = rows[row]! // rbbi.cpp:880-896
+      const accepting = rows[row] // rbbi.cpp:880-896
+      if (accepting === undefined) throw new RangeError('missing value')
       if (accepting === ACCEPTING_UNCONDITIONAL) {
         result = pos
       } else if (accepting > ACCEPTING_UNCONDITIONAL && (matches[accepting] ?? missing()) >= 0) {
@@ -376,7 +378,8 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
         break
       }
 
-      const rule = rows[row + 1]! // rbbi.cpp:904-910
+      const rule = rows[row + 1] // rbbi.cpp:904-910
+      if (rule === undefined) throw new RangeError('missing value')
       if (rule > ACCEPTING_UNCONDITIONAL) matches[rule] = pos
 
       if (state === STOP_STATE) break // rbbi.cpp:912-917
@@ -472,7 +475,6 @@ function isBlinkBreakableSpace(c: number): boolean {
 // Context::ShouldBreakFast, tbi.cc:216-260, with soft hyphens enabled (hyphens: manual).
 // The pair table is Chromium's generated kFastLineBreakTable for U+0021..U+00FF
 // (gen.cc:422-551).
-/** @requires safeInteger(last) && safeInteger(ch) */
 function shouldBreakFast(pairs: Uint8Array, lastLast: number, last: number, ch: number): number {
   if (last < 0x21 || ch < 0x21) return NO_BREAK
   if (last === 0x2d) {
@@ -487,7 +489,7 @@ function shouldBreakFast(pairs: Uint8Array, lastLast: number, last: number, ch: 
   }
   if (last <= 0xff && ch <= 0xff) {
     const x = ch - 0x21
-    return (pairs[(last - 0x21) * 28 + (x >> 3)]! & (1 << (x & 7))) !== 0 ? CAN_BREAK : NO_BREAK
+    return ((pairs[(last - 0x21) * 28 + (x >> 3)] ?? missing()) & (1 << (x & 7))) !== 0 ? CAN_BREAK : NO_BREAK
   }
   return UNKNOWN
 }
@@ -717,7 +719,7 @@ function nextBreakablePosition(pairs: Uint8Array, f: Factory, startPosition: num
     if (before <= 0xff && after <= 0xff) {
       if (before >= 0x21 && after >= 0x21) {
         const x = after - 0x21
-        if ((pairs[(before - 0x21) * 28 + (x >> 3)]! & (1 << (x & 7))) !== 0) return i
+        if (((pairs[(before - 0x21) * 28 + (x >> 3)] ?? missing()) & (1 << (x & 7))) !== 0) return i
       }
       continue
     }
@@ -782,7 +784,7 @@ export function getWebKitLineRules(language: string | null): WebKitLineRules {
   let name = (subtags[0] ?? missing()).toLowerCase()
   for (let k = 1; k < subtags.length; k++) {
     const subtag = subtags[k]!
-    name += '_' + (subtag.length === 4 ? subtag[0]!.toUpperCase() + subtag.slice(1).toLowerCase() : subtag.toUpperCase())
+    name += '_' + (subtag.length === 4 ? (subtag[0] ?? missing()).toUpperCase() + subtag.slice(1).toLowerCase() : subtag.toUpperCase())
   }
   let remap = appleQuoteRemapTable.get(name)
   while (remap === undefined) {

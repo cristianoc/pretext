@@ -60,17 +60,17 @@ export function buildRangeText(
     const kind = (segmentFlags[i] ?? missing()) & KIND_BITS
     if (
       kind === SOFT_HYPHEN || kind === HARD_BREAK ||
-      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && prepared.segments[i]!.charCodeAt(0) === 0x00AD)
+      ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && (prepared.segments[i] ?? missing()).charCodeAt(0) === 0x00AD)
     ) continue
     if (i === startSegmentIndex && startGraphemeIndex > 0) {
-      text += prepared.segments[i]!.slice(getGraphemeStart(prepared, i, startGraphemeIndex))
+      text += (prepared.segments[i] ?? missing()).slice(getGraphemeStart(prepared, i, startGraphemeIndex))
     } else {
-      text += prepared.segments[i]!
+      text += (prepared.segments[i] ?? missing())
     }
   }
 
   if (endGraphemeIndex > 0 && endSegmentIndex < segmentCount) {
-    text += prepared.segments[endSegmentIndex]!.slice(
+    text += (prepared.segments[endSegmentIndex] ?? missing()).slice(
       getGraphemeStart(prepared, endSegmentIndex, startSegmentIndex === endSegmentIndex ? startGraphemeIndex : 0),
       getGraphemeStart(prepared, endSegmentIndex, endGraphemeIndex),
     )

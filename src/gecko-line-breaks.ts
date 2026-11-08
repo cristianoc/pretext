@@ -228,8 +228,8 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
       }
       if (isSpaceOrTabOrSegmentBreak(ch)) {
         if (i >= frameEnd) {
-          while (frame < (frameStarts ?? missing()).length && (frameStarts ?? missing())[frame]! <= i) frame++
-          frameEnd = frame < (frameStarts ?? missing()).length ? (frameStarts ?? missing())[frame]! : len
+          while (frame < (frameStarts ?? missing()).length && ((frameStarts ?? missing())[frame] ?? missing()) <= i) frame++
+          frameEnd = frame < (frameStarts ?? missing()).length ? ((frameStarts ?? missing())[frame] ?? missing()) : len
         }
         let keepLastSpace = false
         let hasSegmentBreak = ch === 0x0a
@@ -526,7 +526,8 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
         break
       }
 
-      const breakState = states[leftProp * geckoLinePropertyCount + rightProp]! // (:702-706, 953)
+      const breakState = states[leftProp * geckoLinePropertyCount + rightProp] // (:702-706, 953)
+      if (breakState === undefined) throw new RangeError('missing value')
       if (breakState === BREAK || breakState === NO_MATCH) {
         if (afterZwj) continue
         break
@@ -562,7 +563,8 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
           continue
         }
 
-        const next = states[index * geckoLinePropertyCount + prop]! // (:1021-1061)
+        const next = states[index * geckoLinePropertyCount + prop] // (:1021-1061)
+        if (next === undefined) throw new RangeError('missing value')
         if (next === KEEP) continue outer
         if (next === NO_MATCH) {
           front = prevFront; pos = prevPos; cp = prevCp
