@@ -1182,11 +1182,10 @@ function createLine(
   if (fragment !== null) fragment.occupiedWidth = occupiedWidth
 
   let rest = lineW - width
-  if (rest < 0 && fragments.length > 0) (fragments[fragments.length - 1] ?? missing()).occupiedWidth -= rest
+  if (rest < 0 && fragments.length > 0) fragments[fragments.length - 1]!.occupiedWidth -= rest
   const openingEdges = items.openingEdges
   for (let k = fragments.length - 1; k >= 0 && rest > 0; k--) {
-    const last = fragments[k]
-    if (last === undefined) throw new RangeError('missing value')
+    const last = fragments[k]!
     // The edge of a padded opening stays painted: it is the first segment of its item, so of a fragment.
     const edge = openingEdges === null || last.start.graphemeIndex > 0 ? 0 : (openingEdges[(itemSegments[last.itemIndex] ?? missing()) + last.start.segmentIndex] ?? missing())
     if (last.occupiedWidth > edge) {
