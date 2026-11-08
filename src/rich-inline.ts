@@ -1311,8 +1311,7 @@ export function materializeRichInlineLineRange(
   const fragments: RichInlineFragment[] = []
 
   for (let i = 0; i < line.fragments.length; i++) {
-    const fragment = line.fragments[i]
-    if (fragment === undefined) throw new RangeError('missing value')
+    const fragment = line.fragments[i]!
     const first = itemSegments[fragment.itemIndex]
     if (first === undefined || fragment.itemIndex + 1 >= itemSegments.length) throw new Error('Missing rich-text inline item for fragment')
     // A range kept from a longer paragraph can end past its item in this one: its text stops at the item's end.
