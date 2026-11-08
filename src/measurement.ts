@@ -513,12 +513,12 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
   const families: string[] = []
   for (let i = 0; i < row.length; i++) {
     // Keywords with the same entry share its family, and the context is asked once.
-    const first = row.indexOf(row[i] ?? missing())
+    const first = row.indexOf(row[i]!)
     if (first < i) {
       families.push(families[first] ?? missing())
       continue
     }
-    const name = webkitGenericFamilyNames[(row[i] ?? missing())]
+    const name = webkitGenericFamilyNames[row[i]!]
     if (name === undefined) throw new RangeError('missing value')
     const pair = name.indexOf('|')
     const family = pair < 0 ? name : hasFamily(ctx, name.slice(0, pair)) ? name.slice(0, pair) : name.slice(pair + 1)
