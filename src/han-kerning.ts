@@ -25,6 +25,7 @@
 import { KIND_BITS, TEXT, UNBROKEN, type TextAnalysis } from './analysis.js'
 import { hasProperty, PUNCTUATION } from './line-breaks.js'
 import { getContext, getSegmentMetrics, zeros, type FontMeasurement } from './measurement.js'
+import { missing } from './checked.js'
 
 const OTHER = 0
 const OPEN = 1
@@ -136,7 +137,7 @@ function getFontData(measurement: FontMeasurement): HanKerningFontData | null {
   // A group has one type only when its glyphs share the advance and the type (han_kerning.cc:88-135).
   const group = (from: number, to: number): number => {
     for (let i = from + 1; i < to; i++) {
-      if (glyphs[i]!.advance !== glyphs[from]!.advance || glyphs[i]!.type !== glyphs[from]!.type) return OTHER
+      if ((glyphs[i] ?? missing()).advance !== (glyphs[from] ?? missing()).advance || (glyphs[i] ?? missing()).type !== (glyphs[from] ?? missing()).type) return OTHER
     }
     return glyphs[from]!.type
   }
@@ -207,7 +208,11 @@ export function getHanKerningTrims(measurement: FontMeasurement, analysis: TextA
   const count = flags.length
   const addWidthTrim = (i: number, trim: number): void => {
     out.widthTrims ??= zeros(to - from)
-    out.widthTrims[i - from] = out.widthTrims[i - from]! + trim
+    const idx = i - from
+    const widthTrimsStore = out.widthTrims
+    const widthTrimsValue = (widthTrimsStore[idx] ?? missing()) + trim
+    if ((idx & 0x7fffffff) !== idx || idx > widthTrimsStore.length) throw new RangeError('index')
+    widthTrimsStore[idx] = widthTrimsValue
   }
   for (let i = from; i < to; i++) {
     if ((flags[i]! & KIND_BITS) !== TEXT) continue

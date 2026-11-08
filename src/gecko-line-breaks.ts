@@ -151,9 +151,8 @@ export function isEastAsianSegmentBreak(text: string, start: number, end: number
   } while (hasProperty(before, DEFAULT_IGNORABLE) && pos > 0)
   let after: number
   pos = end
-  /** @invariant safeInteger(pos) && 0 <= pos && pos < text.length */
   do {
-    after = text.codePointAt(pos)!
+    after = text.codePointAt(pos) ?? missing()
     pos += after > 0xffff ? 2 : 1
   } while (hasProperty(after, DEFAULT_IGNORABLE) && pos < text.length)
   return (isSegmentBreakSkipChar(widths, before) && isSegmentBreakSkipChar(widths, after)) ||
@@ -288,7 +287,8 @@ function transformText(input: string, is8bit: boolean, preserveWhiteSpace: boole
   let sliceStart = 0
   let sliceEnd = 0
   for (let k = 0; k < n; k++) {
-    const i = orig[k]!
+    const i = orig[k]
+    if (i === undefined) throw new RangeError('missing value')
     const ch = input.charCodeAt(i)
     if (!preserveWhiteSpace && (ch === 0x09 || ch === 0x0a)) {
       text += input.slice(sliceStart, sliceEnd) + ' '
@@ -350,7 +350,7 @@ function setupClusterBoundaries(g: Glyphs, text: string, from: number, to: numbe
     const ch = text.charCodeAt(pos)
     if (ch === 0x20 || ch === 0x3000) g.isSpace[pos] = 1
     else if (ch === 0x09af && pos > from && text.charCodeAt(pos - 1) === 0x09cd) extendCluster(g, pos) // BENGALI_YA after BENGALI_VIRAMA
-    const end = count === 0 ? pos + 1 : ends[k]!
+    const end = count === 0 ? pos + 1 : (ends[k] ?? missing())
     for (pos++; pos < end; pos++) extendCluster(g, pos)
   }
 }
@@ -461,7 +461,8 @@ function markWordBreaks(line: LineData, text: string, start: number, end: number
   for (;;) {
     // Break points cached by a complex-script run (:840-855).
     if (cacheAt < cache.length) {
-      const firstPos = cache[cacheAt++]! - cacheOffset
+      const firstPos = (cache[cacheAt] ?? missing()) - cacheOffset
+      cacheAt++
       let i = 0
       while (i !== firstPos) {
         i += cp > 0xffff ? 2 : 1 // Utf16::char_len (rule_segmenter.rs:335-341)
@@ -676,7 +677,8 @@ export function getGeckoLineBreaks(
   const line = lineData ??= { classes: unpackClasses('gecko/line'), states: unpackTable(geckoLineBreakStatesPacked) }
   const state = getBreakStates(line, tr.text, is8bit, hasCompressedLeadingWhitespace(source, tr.skipped, is8bit, preserveWhiteSpace), keepAll)
   for (let t = 1; t < n; t++) {
-    const rawPos = tr.orig[t]!
+    const rawPos = tr.orig[t]
+    if (rawPos === undefined) throw new RangeError('missing value')
     const normal = state[t] === 1 && (g.clusterStart[t] === 1 || g.isSpace[t - 1] === 1)
     const afterSoftHyphen = tr.skipped[rawPos - 1] === 1 && source.charCodeAt(rawPos - 1) === CH_SHY
     if (normal || afterSoftHyphen) {

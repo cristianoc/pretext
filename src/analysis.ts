@@ -247,7 +247,7 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
       breaks[normalizedIndex] = sourceBreaks[i]!
       if (source.charCodeAt(i) === 0x0D && source.charCodeAt(i + 1) === 0x0A) {
         i++
-        if ((sourceBreaks[i]! & BREAK) !== 0) breaks[normalizedIndex] = sourceBreaks[i]!
+        if (((sourceBreaks[i] ?? missing()) & BREAK) !== 0) breaks[normalizedIndex] = sourceBreaks[i] ?? missing()
       }
     }
     breaks[normalizedLength] = sourceBreaks[source.length]!
@@ -384,7 +384,12 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       (breaks[i]! & (BREAK | ITEM_START)) === 0 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i]!)) &&
       gathersKind(kind) && kind === lastKind
     ) {
-      if ((breaks[i]! & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~ONE_CLUSTER
+      if (((breaks[i] ?? missing()) & CLUSTER_START) !== 0) {
+        const idx = flags.length - 1
+        const flagsValue = (flags[idx] ?? missing()) & ~ONE_CLUSTER
+        if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
+        flags[idx] = flagsValue
+      }
       continue
     }
     markRun = unbroken && kind === TEXT && combiningMarkRe.test(normalized[i]!) &&
@@ -563,7 +568,8 @@ export function analyzeText(
             copied = i + 1
             continue
           }
-          const breakBefore = sourceBreaks[i]!
+          const breakBefore = sourceBreaks[i]
+          if (breakBefore === undefined) throw new RangeError('missing value')
           sourceBreaks[count++] = last >= 0 && last < i - 1 && (breakBefore & BREAK) !== 0 && source.charCodeAt(last) === 0x00AD ? breakBefore | SOFT_HYPHEN_BREAK : breakBefore
           last = i
         }
@@ -658,8 +664,8 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
     if (j === normalized.length) break
     breaks[j] = breaks[j]! | ITEM_START
     if (atomic[k] && offsets[j] === starts[k]) {
-      breaks[j] = breaks[j]! | BREAK
-      breaks[j + 1] = breaks[j + 1]! | BREAK | ITEM_START
+      breaks[j] = (breaks[j] ?? missing()) | BREAK
+      breaks[j + 1] = (breaks[j + 1] ?? missing()) | BREAK | ITEM_START
     }
   }
 }
@@ -690,8 +696,8 @@ function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, pre
     // (getWebKitLineBreaks), so only those are scanned.
     const first = source.charCodeAt(start)
     if (end - start > 1 || first === 0x2028 || first === 0x2029) {
-      const itemBreaks = getWebKitLineBreaks(items[k]!.text ?? missing(), preserve, keepAll, language)
-      for (let i = 1; i <= end - start; i++) breaks[start + i] = itemBreaks[i]!
+      const itemBreaks = getWebKitLineBreaks((items[k] ?? missing()).text ?? missing(), preserve, keepAll, language)
+      for (let i = 1; i <= end - start; i++) breaks[start + i] = itemBreaks[i] ?? missing()
     }
     if (previous >= 0 && !atomic[k] && !atomic[previous]) {
       const last = source.charCodeAt(start - 1)

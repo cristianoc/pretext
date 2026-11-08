@@ -218,7 +218,7 @@ function getTerminalLetterSpacing(
   const { letterSpacing, segmentFlags } = prepared
   if (letterSpacing === 0) return 0
 
-  if (endGraphemeIndex > 0) return (segmentFlags[endSegmentIndex]! & SPACED) !== 0 ? letterSpacing : 0
+  if (endGraphemeIndex > 0) return ((segmentFlags[endSegmentIndex] ?? missing()) & SPACED) !== 0 ? letterSpacing : 0
 
   const segmentCount = prepared.widths.length
   if (isDiscretionaryLineEnd(segmentFlags, segmentCount, endSegmentIndex, endGraphemeIndex)) return 0
@@ -259,10 +259,6 @@ export function normalizeMaxWidth(maxWidth: number): number {
 // source a line start consumes before it, such as soft hyphens, is an empty line,
 // which starts at its hard break. The rest of a chunk after a line that wrapped
 // inside it is no line of its own when a line start consumes all of it.
-/**
- * @requires safeInteger(cursor.segmentIndex) && 0 <= cursor.segmentIndex
- * @requires prepared.widths.length <= prepared.segmentFlags.length
- */
 export function normalizePreparedLineStart(
   prepared: PreparedLineData,
   cursor: LayoutCursor,
@@ -371,8 +367,9 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
       continue
     }
 
-    const startW = lineStartExtras === null ? w : w + lineStartExtras[i]!
-    const advances = breakableFitAdvances[i] as number[] | null
+    const startW = lineStartExtras === null ? w : w + (lineStartExtras[i] ?? missing())
+    const advances = breakableFitAdvances[i]
+    if (advances === undefined) throw new RangeError('missing value')
     if (startW - endTrim <= fitLimit || advances === null) {
       lineW += startW
       hasContent = true
@@ -1021,8 +1018,8 @@ function walkPreparedComplexLines(
           }
 
           // A grapheme fits with the letter spacing after it.
-          const fitAdvances = breakableFitAdvances[i] as number[] | null
-          if (fitAdvances === null) throw new RangeError('missing value')
+          const fitAdvances = breakableFitAdvances[i]
+          if (fitAdvances === undefined || fitAdvances === null) throw new RangeError('missing value')
           const fitCount = fitAdvances.length
           for (let g = fillStart; g < fitCount; g++) {
             const baseGw = fitAdvances[g]!
@@ -1122,9 +1119,9 @@ function stepPreparedSimpleLineGeometry(
 
   // The first segment of the line, or the rest of one a line ended inside. One that
   // overflows and can break fills the line grapheme by grapheme.
-  const startAdvances = breakableFitAdvances[start] as number[] | null
-  const startW = lineStartExtras === null ? widths[start]! : widths[start]! + lineStartExtras[start]!
-  const startEndTrim = lineEndTrims === null ? 0 : lineEndTrims[start]!
+  const startAdvances = breakableFitAdvances[start]
+  const startW = lineStartExtras === null ? (widths[start] ?? missing()) : (widths[start] ?? missing()) + (lineStartExtras[start] ?? missing())
+  const startEndTrim = lineEndTrims === null ? 0 : (lineEndTrims[start] ?? missing())
   // Blink's retry between graphemes halts an overflowing first segment where that lets it fit.
   const startTrim = overflowLineEndTrims !== null && startW - overflowLineEndTrims[start]! <= fitLimit
     ? overflowLineEndTrims[start]!
@@ -1135,7 +1132,7 @@ function stepPreparedSimpleLineGeometry(
   let endTrimmed = 0
   if (cursor.graphemeIndex > 0 || (startW - startTrim > fitLimit && startAdvances !== null)) {
     const fitAdvances = startAdvances
-    if (fitAdvances === null) throw new RangeError('missing value')
+    if (fitAdvances === undefined || fitAdvances === null) throw new RangeError('missing value')
     const startExtras = prepared.breakableLineStartExtras?.[start] ?? null
     let g = cursor.graphemeIndex + 1
     lineW = startExtras === null ? fitAdvances[g - 1]! : fitAdvances[g - 1]! + startExtras[g - 1]!

@@ -86,8 +86,8 @@ function needsComplexTextPath(text: string): boolean {
     i += codePoint > 0xFFFF ? 2 : 1
     if (codePoint === 0x200D && previousIsEmoji) return true
     previousIsEmoji = codePoint > 0xFFFF && extendedPictographicRe.test(String.fromCodePoint(codePoint))
-    for (let range = 0; range < complexTextPathRanges.length && codePoint >= complexTextPathRanges[range]!; range += 2) {
-      if (codePoint <= complexTextPathRanges[range + 1]!) return true
+    for (let range = 0; range < complexTextPathRanges.length && codePoint >= (complexTextPathRanges[range] ?? missing()); range += 2) {
+      if (codePoint <= (complexTextPathRanges[range + 1] ?? missing())) return true
     }
   }
   return false
@@ -138,12 +138,11 @@ export const OPENING_BRACKET_SHIFT = 14
 // Every code point's class, unpacked when a text first asks for a script.
 let scriptClasses: ClassTable | null = null
 function getScriptFacts(c: number): number {
-  return scriptClassFacts[getClass(scriptClasses ??= unpackClasses('chromium/script'), c)]!
+  return scriptClassFacts[getClass(scriptClasses ??= unpackClasses('chromium/script'), c)] ?? missing()
 }
 
 // The facts of the character at text[i], with the scripts it has there, as Blink reads them
 // (GetScripts, script_run_iterator.cc:118-215).
-/** @requires safeInteger(i) && 0 <= i && i < text.length */
 function getScriptFactsAt(text: string, i: number): number {
   const c = text.codePointAt(i)!
   const facts = getScriptFacts(c)
@@ -260,8 +259,8 @@ function getUnspacedGraphemes(text: string, start: number, end: number, grapheme
   const ends = new Int32Array(end - start)
   const count = findGraphemeEnds(graphemeTable, text, start, end, ends)
   let unspaced: number[] | null = null
-  for (let g = 0, at = start; g < count; at = ends[g++]!) {
-    const joins = runs === null ? (getScriptFacts(text.codePointAt(at)!) & CURSIVE_LETTER) !== 0
+  for (let g = 0, at = start; g < count; at = ends[g++] ?? missing()) {
+    const joins = runs === null ? (getScriptFacts(text.codePointAt(at) ?? missing()) & CURSIVE_LETTER) !== 0
       : readScriptRuns(runs, text, at + 1) === CURSIVE_SCRIPT && text.charCodeAt(at) !== 0xA0
     if (joins) (unspaced ??= []).push(g)
   }
@@ -308,8 +307,9 @@ function getFollowingSpaceTail(analysis: TextAnalysis, analysisIndex: number, to
   if (next >= to) return null
   const nextKind = flags[next]! & KIND_BITS
   // A collapsed space's first source character: WebKit looks at the source after a text item.
-  const spaceStart = starts[next]!
-  if ((nextKind !== SPACE && nextKind !== PRESERVED_SPACE) || (spaceSources === null ? normalized.charCodeAt(spaceStart) : spaceSources[spaceStart]!) !== 0x20) return null
+  const spaceStart = starts[next]
+  if (spaceStart === undefined) throw new RangeError('missing value')
+  if ((nextKind !== SPACE && nextKind !== PRESERVED_SPACE) || (spaceSources === null ? normalized.charCodeAt(spaceStart) : (spaceSources[spaceStart] ?? missing())) !== 0x20) return null
   return normalized.slice(starts[analysisIndex + 1], spaceStart)
 }
 
@@ -531,7 +531,14 @@ export function measureAnalysis(
         fitAdvances = fit.advances
         if (fitAdvances === null) break
         // A difference from the advance, so it holds whatever the advances take below.
-        if (fit.lineStartExtras !== null) (breakableLineStartExtras ??= new Array<number[] | null>(to - from).fill(null))[mi - from] = fit.lineStartExtras
+        const startExtras = fit.lineStartExtras
+        if (startExtras !== null) {
+          breakableLineStartExtras ??= new Array<number[] | null>(to - from).fill(null)
+          const idx = mi - from
+          const breakableLineStartExtrasStore = breakableLineStartExtras
+          if ((idx & 0x7fffffff) !== idx || idx > breakableLineStartExtrasStore.length) throw new RangeError('index')
+          breakableLineStartExtrasStore[idx] = startExtras
+        }
         // The cached advances are shared by every occurrence of this text; only
         // the final grapheme touches the following space.
         if (followingSpaceKerning !== 0) {
@@ -662,9 +669,10 @@ export function measureAnalysis(
 function addKanaKerning(extras: number[] | null, widths: number[], base: number, analysis: TextAnalysis, from: number, to: number, measurement: FontMeasurement, kernings: Float64Array): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = from; i < to; i++) {
-    if ((flags[i]! & KIND_BITS) !== TEXT) continue
-    const start = starts[i]!
-    const end = i + 1 < flags.length ? starts[i + 1]! : normalized.length
+    if (((flags[i] ?? missing()) & KIND_BITS) !== TEXT) continue
+    const start = starts[i]
+    if (start === undefined) throw new RangeError('missing value')
+    const end = i + 1 < flags.length ? (starts[i + 1] ?? missing()) : normalized.length
     const at = base + i - from
     for (let k = i > from ? start : start + 1; k < end; k++) {
       const kerning = getKanaKerning(normalized, start, k, measurement, kernings)
@@ -712,8 +720,8 @@ function addIdeographicSpaceHangs(
 ): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = from; i < to; i++) {
-    const end = i + 1 < flags.length ? starts[i + 1]! : normalized.length
-    if ((flags[i]! & KIND_BITS) !== TEXT || normalized.charCodeAt(end - 1) !== 0x3000) continue
+    const end = i + 1 < flags.length ? (starts[i + 1] ?? missing()) : normalized.length
+    if (((flags[i] ?? missing()) & KIND_BITS) !== TEXT || normalized.charCodeAt(end - 1) !== 0x3000) continue
     if (i + 1 < to) {
       const next = flags[i + 1]! & KIND_BITS
       if (next !== HARD_BREAK && next !== SPACE && !(next === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) continue

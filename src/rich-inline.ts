@@ -528,11 +528,29 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // CRLF is one line feed, which ends with the item where the next item holds the line feed.
         sourceEnds.push((preserve && sourceEnd < itemEnd && source.charCodeAt(sourceEnd - 1) === 0x0D && source.charCodeAt(sourceEnd) === 0x0A ? sourceEnd + 1 : sourceEnd) - starts[index]!)
       }
-      const units = getSourceUnits(offsets, normalizedStart, textEnd, starts[index]!)
-      if (units !== null) (sourceUnits ??= new Array<number[] | null>(flags.length).fill(null))[at] = units
-      if (sub.breakableLineStartExtras !== null && sub.breakableLineStartExtras[s] !== null) (breakableLineStartExtras ??= new Array<number[] | null>(flags.length).fill(null))[at] = sub.breakableLineStartExtras[s]!
-      const startExtra = (sub.lineStartExtras === null ? 0 : sub.lineStartExtras[s]!) + (i > first ? extraWidth : 0)
-      if (startExtra !== 0) (lineStartExtras ??= zeroList(flags.length))[at] = startExtra
+      const units = getSourceUnits(offsets, normalizedStart, textEnd, starts[index] ?? missing())
+      if (units !== null) {
+        sourceUnits ??= new Array<number[] | null>(flags.length).fill(null)
+        const sourceUnitsStore = sourceUnits
+        if ((at & 0x7fffffff) !== at || at > sourceUnitsStore.length) throw new RangeError('index')
+        sourceUnitsStore[at] = units
+      }
+      const subStartExtras = sub.breakableLineStartExtras
+      if (subStartExtras !== null && subStartExtras[s] !== null) {
+        breakableLineStartExtras ??= new Array<number[] | null>(flags.length).fill(null)
+        const breakableLineStartExtrasStore = breakableLineStartExtras
+        const breakableLineStartExtrasValue = subStartExtras[s]
+        if (breakableLineStartExtrasValue === undefined) throw new RangeError('missing value')
+        if ((at & 0x7fffffff) !== at || at > breakableLineStartExtrasStore.length) throw new RangeError('index')
+        breakableLineStartExtrasStore[at] = breakableLineStartExtrasValue
+      }
+      const startExtra = (sub.lineStartExtras === null ? 0 : (sub.lineStartExtras[s] ?? missing())) + (i > first ? extraWidth : 0)
+      if (startExtra !== 0) {
+        lineStartExtras ??= zeroList(flags.length)
+        const lineStartExtrasStore = lineStartExtras
+        if ((at & 0x7fffffff) !== at || at > lineStartExtrasStore.length) throw new RangeError('index')
+        lineStartExtrasStore[at] = startExtra
+      }
       if (sub.lineEndTrims !== null) {
         const endTrim = sub.lineEndTrims[s]!
         if (endTrim !== 0) (lineEndTrims ??= zeroList(flags.length))[at] = endTrim
@@ -776,8 +794,10 @@ function setEmptyObjectFacts(
       let space = -1
       if (beforeKind === SPACE) space = segmentItems[before] === segmentItems[first - 1] ? widths[before]! + ((segmentFlags[before]! & SPACED) !== 0 ? letterSpacing : 0) : 0
       else if (beforeKind === TAB || (beforeKind === PRESERVED_SPACE && segmentItems[before] !== segmentItems[before + 1])) space = 0
-      spaces[first] = space
-      const lastKind = first === 0 ? TEXT : segmentFlags[first - 1]! & KIND_BITS
+      const spacesStore = spaces
+      if ((first & 0x7fffffff) !== first || first > spacesStore.length) throw new RangeError('index')
+      spacesStore[first] = space
+      const lastKind = first === 0 ? TEXT : (segmentFlags[first - 1] ?? missing()) & KIND_BITS
       if (!keeps && (space >= 0 || lastKind === OBJECT || lastKind === SOFT_HYPHEN)) returns[first] = 1
       continue
     }
@@ -908,8 +928,8 @@ function getOpeningFit(flags: number[], from: number, to: number, extraWidth: nu
 /** @requires safeInteger(i) && 0 <= i && i < data.widths.length && safeInteger(from) && 0 <= from */
 function getPartWidth(data: PreparedSegments, i: number, from: number, to: number, startsLine: boolean): number {
   const { breakableFitAdvances, breakableLineStartExtras, letterSpacing, items } = data
-  const advances = breakableFitAdvances[i] as number[] | null
-  if (advances === null) throw new RangeError('missing value')
+  const advances = breakableFitAdvances[i]
+  if (advances === undefined || advances === null) throw new RangeError('missing value')
   if (to < 0) to = advances.length
   let w = 0
   for (let g = from; g < to; g++) w += advances[g]! + letterSpacing
@@ -1009,9 +1029,10 @@ function createLine(
     for (let i = startSegmentIndex; i <= lastSegmentIndex; i++) {
       if (i === to) {
         if (fragment !== null) fragment.occupiedWidth = occupiedWidth
-        const itemIndex = segmentItems[i]!
-        if (gapSegments[i]! !== 0) {
-          gap = widths[i]!
+        const itemIndex = segmentItems[i]
+        if (itemIndex === undefined) throw new RangeError('missing value')
+        if ((gapSegments[i] ?? missing()) !== 0) {
+          gap = widths[i] ?? missing()
           gapItemIndex = itemIndex
           to = i + 1
           continue
@@ -1117,7 +1138,6 @@ function createLine(
 }
 
 // The paragraph's segment a cursor names, or the segment count for one past the last item.
-/** @requires safeInteger(cursor.itemIndex) && cursor.itemIndex >= 0 */
 function getSegmentIndex(flow: InternalPreparedRichInline, cursor: RichInlineCursor): number {
   const { itemSegments } = flow
   return cursor.itemIndex < itemSegments.length ? itemSegments[cursor.itemIndex]! + cursor.segmentIndex : flow.data.widths.length
@@ -1180,9 +1200,9 @@ function findSegmentSources(flow: InternalPreparedRichInline): TextSources {
   const sourceStarts: number[] = []
   const sourceEnds: number[] = []
   const sourceUnits: (number[] | null)[] = []
-  for (let i = 0, at = 0; i < segments.length; at += segments[i++]!.length) {
-    const end = offsets[at + segments[i]!.length - 1]! + 1
-    sourceStarts.push(offsets[at]!)
+  for (let i = 0, at = 0; i < segments.length; at += (segments[i++] ?? missing()).length) {
+    const end = (offsets[at + (segments[i] ?? missing()).length - 1] ?? missing()) + 1
+    sourceStarts.push(offsets[at] ?? missing())
     sourceEnds.push(flow.text.charCodeAt(end - 1) === 0x0D && flow.text.charCodeAt(end) === 0x0A && segments[i] === '\n' ? end + 1 : end)
     sourceUnits.push(getSourceUnits(offsets, at, at + segments[i]!.length, 0))
   }
@@ -1203,7 +1223,8 @@ function findSegmentSources(flow: InternalPreparedRichInline): TextSources {
  * @requires sourceUnits === null || segmentIndex < sourceUnits.length
  */
 function getSourceOffset(sourceStarts: number[], sourceUnits: (number[] | null)[] | null, segmentIndex: number, unit: number): number {
-  const units = sourceUnits === null ? null : sourceUnits[segmentIndex]!
+  const units = sourceUnits === null ? null : sourceUnits[segmentIndex]
+  if (units === undefined) throw new RangeError('missing value')
   if (units === null) return sourceStarts[segmentIndex]! + unit
   // The segment's end, where a grapheme start past its last grapheme stops: just past its last unit.
   return units[unit] ?? (units.length > 0 ? units[units.length - 1]! + 1 : sourceStarts[segmentIndex]!)

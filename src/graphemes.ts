@@ -12,6 +12,7 @@
 
 import type { CharTable } from './generated/engine-break-data.js'
 import { getBreakRules, getClass, START_STATE, type BreakRules } from './line-breaks.js'
+import { missing } from './checked.js'
 
 const CLUSTER_END = 0x80
 
@@ -41,9 +42,10 @@ function parseGraphemeRules(table: GraphemeTable): GraphemeRules {
   const transitions = new Uint8Array(states * rules.catCount)
   for (let state = 0; state < states; state++) {
     for (let category = 0; category < rules.catCount; category++) {
-      const next = rows[state * width + 3 + category]!
-      transitions[state * rules.catCount + category] = next === 0 || rows[next * width]! > 1
-        ? CLUSTER_END | rows[START_STATE * width + 3 + category]!
+      const next = rows[state * width + 3 + category]
+      if (next === undefined) throw new RangeError('missing value')
+      transitions[state * rules.catCount + category] = next === 0 || (rows[next * width] ?? missing()) > 1
+        ? CLUSTER_END | (rows[START_STATE * width + 3 + category] ?? missing())
         : next
     }
   }
@@ -79,7 +81,8 @@ export function findGraphemeEnds(table: GraphemeTable, text: string, start: numb
       continue
     }
     // The start state takes every code point without CLUSTER_END, so none is set at `start`.
-    const transition = transitions[state * catCount + category]!
+    const transition = transitions[state * catCount + category]
+    if (transition === undefined) throw new RangeError('missing value')
     if ((transition & CLUSTER_END) !== 0) {
       if (ends !== null) ends[count] = i
       count++

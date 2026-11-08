@@ -32,6 +32,7 @@
 //   locale for the user's first Chinese language (FontDescription.cpp:74-83, 107-113).
 //   Pretext resolves no bidi levels here and takes preparation's language as it is.
 
+import { missing } from './checked.js'
 import {
   appleQuoteRemaps,
   blinkLinePairsPacked,
@@ -100,7 +101,7 @@ export function unpackTable(packed: string): Uint8Array {
     const from = out - varint()
     // A copy that overlaps the bytes it writes repeats them, so it goes one byte at a time.
     if (from + length <= out) bytes.copyWithin(out, from, from + length)
-    else for (let k = 0; k < length; k++) bytes[out + k] = bytes[from + k]!
+    else for (let k = 0; k < length; k++) bytes[out + k] = bytes[from + k] ?? missing()
     out += length
   }
   if (out !== bytes.length) throw new Error('A packed table unpacked to the wrong length')
@@ -134,7 +135,7 @@ export type ClassTable = { readonly index: Uint16Array, readonly values: Uint8Ar
 // entry above that, where the engines' tries give their error value (unicode/ucptrie.h:615-620;
 // getLineBreakClass in src/gecko-line-breaks.ts gives ICU4X's itself).
 export function getClass(table: ClassTable, c: number): number {
-  return table.values[(table.index[c >> 8]! << 8) | (c & 0xff)]!
+  return table.values[((table.index[c >> 8] ?? missing()) << 8) | (c & 0xff)] ?? missing()
 }
 
 // The maps ship as one list of runs over U+0000..U+10FFFF, each run a length - 1 and a joint class:
@@ -159,7 +160,7 @@ export function unpackClassRuns(runs: Int32Array, remap: Uint8Array, blocks: num
       while (c < end) {
         const block = c >> 8
         if ((c & 0xff) === 0 && end - c >= 0x100) {
-          if (whole[value]! < 0) {
+          if ((whole[value] ?? missing()) < 0) {
             whole[value] = count
             values.fill(value, count << 8, ++count << 8)
           }
@@ -230,7 +231,7 @@ export function hasProperty(cp: number, property: number): boolean {
   const has = 1 << (property * 2)
   let bits = cp < 0x10000 ? bmp[cp]! : astralProperties.get(cp) ?? 0
   if ((bits & has << 1) === 0) {
-    bits |= has << 1 | (PROPERTY_TESTS[property]!().test(String.fromCodePoint(cp)) ? has : 0)
+    bits |= has << 1 | ((PROPERTY_TESTS[property] ?? missing())().test(String.fromCodePoint(cp)) ? has : 0)
     if (cp < 0x10000) bmp[cp] = bits
     else astralProperties.set(cp, bits)
   }
@@ -283,9 +284,9 @@ export function unpackStateRows(width: number, states: number, base: Uint16Array
     const back = differences[i++]! * width
     if (back > 0) rows.copyWithin(row, row - back, row - back + width)
     let at = row - 1
-    for (let n = differences[i++]!; n > 0; n--) {
-      at += 1 + differences[i++]!
-      rows[at] = differences[i++]!
+    for (let n = differences[i++] ?? missing(); n > 0; n--) {
+      at += 1 + (differences[i++] ?? missing())
+      rows[at] = differences[i++] ?? missing()
     }
   }
   return rows
@@ -370,8 +371,8 @@ export function markRuleBoundaries(r: BreakRules, text: string, flags: Uint8Arra
       const accepting = rows[row]! // rbbi.cpp:880-896
       if (accepting === ACCEPTING_UNCONDITIONAL) {
         result = pos
-      } else if (accepting > ACCEPTING_UNCONDITIONAL && matches[accepting]! >= 0) {
-        boundary = matches[accepting]!
+      } else if (accepting > ACCEPTING_UNCONDITIONAL && (matches[accepting] ?? missing()) >= 0) {
+        boundary = matches[accepting] ?? missing()
         break
       }
 
@@ -471,7 +472,7 @@ function isBlinkBreakableSpace(c: number): boolean {
 // Context::ShouldBreakFast, tbi.cc:216-260, with soft hyphens enabled (hyphens: manual).
 // The pair table is Chromium's generated kFastLineBreakTable for U+0021..U+00FF
 // (gen.cc:422-551).
-/** @requires safeInteger(last) && safeInteger(ch) && 6244 <= pairs.length */
+/** @requires safeInteger(last) && safeInteger(ch) */
 function shouldBreakFast(pairs: Uint8Array, lastLast: number, last: number, ch: number): number {
   if (last < 0x21 || ch < 0x21) return NO_BREAK
   if (last === 0x2d) {
@@ -667,7 +668,6 @@ function createFactory(text: string, line: WebKitLineRules): Factory {
 // The first ICU boundary after `location`, or -1. `location` is -1 only with a prior
 // context; WebKit's unsigned arithmetic then lands on the last prior character
 // (TBIICU.h:136-142).
-/** @requires safeInteger(location) && -1 <= location && location <= 4294967295 && safeInteger(f.priorLength) && 0 <= f.priorLength && f.priorLength <= 2 */
 function following(f: Factory, location: number): number {
   let next = f.nextBoundary
   if (next === null) {
@@ -684,7 +684,8 @@ function following(f: Factory, location: number): number {
   }
   const o = location + f.priorLength + 1
   if (o >= next.length) return -1
-  const b = next[o]!
+  const b = next[o]
+  if (b === undefined) throw new RangeError('missing value')
   return b < 0 ? -1 : b - f.priorLength
 }
 
@@ -778,7 +779,7 @@ export function getWebKitLineRules(language: string | null): WebKitLineRules {
   const breakLanguage = getBreakLanguage(locale)
   const rules = getBreakRules(breakLanguage === 'ja' || breakLanguage === 'ko' ? 'apple/line_normal' : breakLanguage === 'zh' ? 'apple/line_cj' : 'apple/line')
   const subtags = locale.split(/[-_]/)
-  let name = subtags[0]!.toLowerCase()
+  let name = (subtags[0] ?? missing()).toLowerCase()
   for (let k = 1; k < subtags.length; k++) {
     const subtag = subtags[k]!
     name += '_' + (subtag.length === 4 ? subtag[0]!.toUpperCase() + subtag.slice(1).toLowerCase() : subtag.toUpperCase())

@@ -35,6 +35,7 @@ import {
   type PreparedLineData,
 } from './line-break.js'
 import { buildLineTextFromRange } from './line-text.js'
+import { missing } from './checked.js'
 
 // --- Public types ---
 
@@ -138,7 +139,7 @@ export function prepareWithSegments(text: string, font: string, options?: Prepar
   const prepared = prepareInternal(text, font, segments, options)
   // Each segment's kind by name, from its flags.
   const kinds: SegmentBreakKind[] = []
-  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS]!)
+  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS] ?? missing())
   return { ...prepared, segments, kinds }
 }
 

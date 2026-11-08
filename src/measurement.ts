@@ -515,7 +515,7 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
     // Keywords with the same entry share its family, and the context is asked once.
     const first = row.indexOf(row[i]!)
     if (first < i) {
-      families.push(families[first]!)
+      families.push(families[first] ?? missing())
       continue
     }
     const name = webkitGenericFamilyNames[row[i]!]!
@@ -703,7 +703,9 @@ export function getExtraSpacings(seg: string, measurement: FontMeasurement): num
       before = glyphs
       if (extra === 0 && extras.length === 0) continue
       if (extras.length === 0) extras = zeros(count)
-      extras[i] = extra
+      const extrasStore = extras
+      if ((i & 0x7fffffff) !== i || i > extrasStore.length) throw new RangeError('index')
+      extrasStore[i] = extra
     }
   } finally {
     if (context !== null) context.letterSpacing = measurement.letterSpacing
@@ -947,7 +949,8 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
     if (code >= 0x2e80 && !isCanvasWordLetter(code)) return 0
   }
   const index = (first - 0x3041) * KANA_COUNT + second - 0x3041
-  const kerning = kernings[index]!
+  const kerning = kernings[index]
+  if (kerning === undefined) throw new RangeError('missing value')
   return Number.isNaN(kerning) ? kernings[index] = measureKanaKerning(text.slice(at - 1, at + 1), measurement) : kerning
 }
 
@@ -955,7 +958,7 @@ export function getKanaKerning(text: string, start: number, at: number, measurem
 // whole, less each alone.
 function measureKanaKerning(pair: string, measurement: FontMeasurement): number {
   const pairWidth = getWholeRunContext(measurement).measureText(pair).width
-  const kerning = pairWidth - getSegmentMetrics(pair[0]!, measurement).width - getSegmentMetrics(pair[1]!, measurement).width
+  const kerning = pairWidth - getSegmentMetrics(pair[0] ?? missing(), measurement).width - getSegmentMetrics(pair[1] ?? missing(), measurement).width
   // As for a character and a space, up to the pair's width / 2^22 is rounding.
   return Math.abs(kerning) <= pairWidth / 0x400000 ? 0 : kerning
 }
@@ -1182,7 +1185,7 @@ function countEmojiGlyphs(text: string, measurement: FontMeasurement): number {
   const ends = new Int32Array(text.length)
   const graphemeCount = findGraphemeEnds(getEngineProfile().graphemeTable, text, 0, text.length, ends)
   let count = 0
-  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++]!) {
+  for (let i = 0, start = 0; i < graphemeCount; start = ends[i++] ?? missing()) {
     const grapheme = text.slice(start, ends[i])
     if (!emojiGraphemeRe.test(grapheme)) continue
     for (const stretch of (grapheme.match(emojiStretchRe) ?? missing())) count += getEmojiGlyphs(stretch, measurement)
@@ -1233,7 +1236,7 @@ export function getSegmentFit(
       pairs = count > MAX_PREFIX_FIT_GRAPHEMES || addUpTo(advances, width)
       if (!pairs) advances = measureFitAdvances(seg, ends, count, 'segment-prefixes', metrics, measurement, emojiCorrection, followingSpaceWidth)
       lineStartExtras = [0]
-      for (let i = 1; i < count; i++) lineStartExtras.push(alone[i]! - advances[i]!)
+      for (let i = 1; i < count; i++) lineStartExtras.push((alone[i] ?? missing()) - (advances[i] ?? missing()))
     }
   } else {
     // Past MAX_PREFIX_FIT_GRAPHEMES, prefixes give way to pairs.
@@ -1336,8 +1339,9 @@ function measureFitAdvances(
   const advances: number[] = []
   let previousStart = 0
   let previousWidth = 0
-  for (let i = 0, start = 0; i < count; start = ends[i++]!) {
-    const end = ends[i]!
+  for (let i = 0, start = 0; i < count; start = ends[i++] ?? missing()) {
+    const end = ends[i]
+    if (end === undefined) throw new RangeError('missing value')
     if (prefixes) {
       // The whole segment is the last prefix; with a following space it was
       // measured together with that space.

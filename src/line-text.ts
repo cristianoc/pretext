@@ -2,6 +2,7 @@ import { findGraphemeEnds } from './graphemes.js'
 import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
 import { isDiscretionaryLineEnd, type PreparedLineData } from './line-break.js'
 import { getEngineProfile } from './measurement.js'
+import { missing } from './checked.js'
 
 // A handle with each segment's text, which line text is built from: prepareWithSegments()'s, or
 // a rich-inline paragraph's.
@@ -40,7 +41,6 @@ export function getGraphemeStart(prepared: PreparedSegments, segmentIndex: numbe
 
 // The text of a range of `prepared`'s segments, with no hyphen: that of a rich-inline fragment its
 // line goes on after.
-/** @requires safeInteger(startSegmentIndex) && 0 <= startSegmentIndex */
 export function buildRangeText(
   prepared: PreparedSegments,
   startSegmentIndex: number,
@@ -57,7 +57,7 @@ export function buildRangeText(
   for (let i = startSegmentIndex; i < segmentEnd; i++) {
     // A soft hyphen shows only as the hyphen of a line that ends at it, and one the
     // Gecko scan takes as a zero-width break never does.
-    const kind = segmentFlags[i]! & KIND_BITS
+    const kind = (segmentFlags[i] ?? missing()) & KIND_BITS
     if (
       kind === SOFT_HYPHEN || kind === HARD_BREAK ||
       ((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && prepared.segments[i]!.charCodeAt(0) === 0x00AD)
