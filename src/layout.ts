@@ -8,6 +8,7 @@
 // Browser measurement limitations are documented in README.md and PLATFORM_BUGS.md.
 // Based on Sebastian Markbage's text-layout research (github.com/chenglou/text-layout).
 
+import { missing } from './checked.js'
 import { clearWordSegmenter } from './line-breaks.js'
 import {
   analyzeText,
@@ -35,7 +36,6 @@ import {
   type PreparedLineData,
 } from './line-break.js'
 import { buildLineTextFromRange } from './line-text.js'
-import { missing } from './checked.js'
 
 // --- Public types ---
 

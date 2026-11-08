@@ -22,10 +22,10 @@
 // Canvas once per font: in `cc` HanKerning halts exactly one of the two, so a character's trim
 // is 2 W(c) - W(cc), and the types of dots, colons, semicolons and quotes follow their ink
 // bounds under the page's Han script (han_kerning.cc:47-168, 400-535).
+import { missing } from './checked.js'
 import { KIND_BITS, TEXT, UNBROKEN, type TextAnalysis } from './analysis.js'
 import { hasProperty, PUNCTUATION } from './line-breaks.js'
 import { getContext, getSegmentMetrics, zeros, type FontMeasurement } from './measurement.js'
-import { missing } from './checked.js'
 
 const OTHER = 0
 const OPEN = 1

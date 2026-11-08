@@ -10,9 +10,9 @@
 // Chrome's rules past them: one goes with the cluster before it, or at the start with the one
 // after it, and text of only such characters holds no cluster.
 
+import { missing } from './checked.js'
 import type { CharTable } from './generated/engine-break-data.js'
 import { getBreakRules, getClass, START_STATE, type BreakRules } from './line-breaks.js'
-import { missing } from './checked.js'
 
 const CLUSTER_END = 0x80
 

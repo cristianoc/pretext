@@ -1,8 +1,8 @@
+import { missing } from './checked.js'
 import { findGraphemeEnds } from './graphemes.js'
 import { HARD_BREAK, KIND_BITS, SOFT_HYPHEN, ZERO_WIDTH_BREAK, ZERO_WIDTH_GLUE } from './analysis.js'
 import { isDiscretionaryLineEnd, type PreparedLineData } from './line-break.js'
 import { getEngineProfile } from './measurement.js'
-import { missing } from './checked.js'
 
 // A handle with each segment's text, which line text is built from: prepareWithSegments()'s, or
 // a rich-inline paragraph's.
