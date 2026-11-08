@@ -212,7 +212,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     const measured = measureAnalysis(analysis, 0, analysis.flags.length, only.font, segments, readLetterSpacing(only.letterSpacing, profile), profile, language, true, null)
     const data: PreparedSegments = { ...measured, segments }
     const itemSegments: number[] = []
-    /** @invariant forall i in itemSegments: safeInteger(itemSegments[i]) && 0 <= itemSegments[i] && itemSegments[i] <= data.segmentFlags.length */
     for (let index = 0; index <= items.length; index++) itemSegments.push(index <= onlyIndex ? 0 : data.segmentFlags.length)
     return findWholeLine({
       data, onlyItem: onlyIndex, wholeWidth: null, wholeStart: 0, wholeEnd: 0, itemSegments, segmentItems: null, gapSegments: null, plainWidths: false,
@@ -1290,7 +1289,7 @@ function getSourceOffset(sourceStarts: number[], sourceUnits: (number[] | null)[
   if (units === undefined) throw new RangeError('missing value')
   if (units === null) return (sourceStarts[segmentIndex] ?? missing()) + unit
   // The segment's end, where a grapheme start past its last grapheme stops: just past its last unit.
-  return units[unit] ?? (units.length > 0 ? units[units.length - 1]! + 1 : (sourceStarts[segmentIndex] ?? missing()))
+  return units[unit] ?? (units.length > 0 ? (units[units.length - 1] ?? missing()) + 1 : (sourceStarts[segmentIndex] ?? missing()))
 }
 
 // Bridge from cheap range walking to full fragment text. Lets callers do
