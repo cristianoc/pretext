@@ -921,14 +921,11 @@ function findWholeLine(flow: InternalPreparedRichInline): InternalPreparedRichIn
 
 // Whether an item of the paragraph takes less than no room on a line: its segments' widths, with
 // the letter spacing after each one that takes it, add up to less than 0.
-/**
- * @requires forall i in itemSegments: safeInteger(itemSegments[i]) && 0 <= itemSegments[i] && itemSegments[i] <= data.widths.length
- */
 function narrowsLine(data: PreparedSegments, itemSegments: number[]): boolean {
   const { widths, segmentFlags, letterSpacing } = data
   for (let index = 0; index + 1 < itemSegments.length; index++) {
     let width = 0
-    for (let i = itemSegments[index]!; i < itemSegments[index + 1]!; i++) width += widths[i]! + ((segmentFlags[i]! & SPACED) !== 0 ? letterSpacing : 0)
+    for (let i = itemSegments[index] ?? missing(); i < (itemSegments[index + 1] ?? missing()); i++) width += (widths[i] ?? missing()) + (((segmentFlags[i] ?? missing()) & SPACED) !== 0 ? letterSpacing : 0)
     if (width < 0) return true
   }
   return false
@@ -980,10 +977,10 @@ function getOpeningFit(flags: number[], from: number, to: number, extraWidth: nu
   const opensWithWhiteSpace = firstKind === PRESERVED_SPACE || (firstKind === TAB && profile.hangTabs)
   const opensWithBreak = firstKind === HARD_BREAK || firstKind === ZERO_WIDTH_BREAK
   let whiteSpaceEnd = from
-  while (whiteSpaceEnd < to && ((flags[whiteSpaceEnd]! & KIND_BITS) === PRESERVED_SPACE || (flags[whiteSpaceEnd]! & KIND_BITS) === TAB)) whiteSpaceEnd++
+  while (whiteSpaceEnd < to && (((flags[whiteSpaceEnd] ?? missing()) & KIND_BITS) === PRESERVED_SPACE || ((flags[whiteSpaceEnd] ?? missing()) & KIND_BITS) === TAB)) whiteSpaceEnd++
   if (fit === 'start' && (opensWithWhiteSpace || opensWithBreak)) return afterTextSpaces || whiteSpaceEnd === to ? 0 : extraWidth / 2
   if (fit === 'placed' && (opensWithWhiteSpace || opensWithBreak)) {
-    const onlyOpening = whiteSpaceEnd === to || (whiteSpaceEnd === to - 1 && (flags[whiteSpaceEnd]! & KIND_BITS) === HARD_BREAK)
+    const onlyOpening = whiteSpaceEnd === to || (whiteSpaceEnd === to - 1 && ((flags[whiteSpaceEnd] ?? missing()) & KIND_BITS) === HARD_BREAK)
     return onlyOpening ? extraWidth : extraWidth / 2
   }
   return extraWidth
@@ -1240,7 +1237,7 @@ export function layoutNextRichInlineLineRange(
 // one stretch of it: Gecko removes a line feed between two ideographs, and white space after a bidi
 // control that follows white space. Else null.
 function getSourceUnits(offsets: Int32Array, from: number, to: number, itemStart: number): number[] | null {
-  if (to <= from || offsets[to - 1]! - offsets[from]! === to - 1 - from) return null
+  if (to <= from || (offsets[to - 1] ?? missing()) - (offsets[from] ?? missing()) === to - 1 - from) return null
   const units: number[] = []
   for (let unit = from; unit < to; unit++) units.push((offsets[unit] ?? missing()) - itemStart)
   return units
@@ -1320,14 +1317,15 @@ export function materializeRichInlineLineRange(
     const first = itemSegments[fragment.itemIndex]
     if (first === undefined || fragment.itemIndex + 1 >= itemSegments.length) throw new Error('Missing rich-text inline item for fragment')
     // A range kept from a longer paragraph can end past its item in this one: its text stops at the item's end.
-    const itemEnd = itemSegments[fragment.itemIndex + 1]!
+    const itemEnd = itemSegments[fragment.itemIndex + 1]
+    if (itemEnd === undefined) throw new RangeError('missing value')
     const startSegmentIndex = Math.min(first + fragment.start.segmentIndex, itemEnd)
     const startGraphemeIndex = fragment.start.graphemeIndex
     const endSegmentIndex = Math.min(first + fragment.end.segmentIndex, itemEnd)
     const endGraphemeIndex = endSegmentIndex < itemEnd ? fragment.end.graphemeIndex : 0
     // Only the fragment a line ends with shows the hyphen of a soft hyphen it ends at.
     const endsLine = i === line.fragments.length - 1 && endSegmentIndex === lineEndSegmentIndex && endGraphemeIndex === line.end.graphemeIndex
-    let sourceStart = startSegmentIndex < itemEnd ? sourceStarts[startSegmentIndex]! : startSegmentIndex > first ? (sourceEnds ?? missing())[startSegmentIndex - 1]! : 0
+    let sourceStart = startSegmentIndex < itemEnd ? (sourceStarts[startSegmentIndex] ?? missing()) : startSegmentIndex > first ? ((sourceEnds ?? missing())[startSegmentIndex - 1] ?? missing()) : 0
     if (startGraphemeIndex > 0 && startSegmentIndex < itemEnd) sourceStart = getSourceOffset(sourceStarts, sourceUnits, startSegmentIndex, getGraphemeStart(data, startSegmentIndex, startGraphemeIndex))
     let sourceEnd = sourceStart
     if (endGraphemeIndex > 0) sourceEnd = getSourceOffset(sourceStarts, sourceUnits, endSegmentIndex, getGraphemeStart(data, endSegmentIndex, endGraphemeIndex) - 1) + 1
