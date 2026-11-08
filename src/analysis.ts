@@ -477,7 +477,7 @@ export function analyzeText(
   let source = preserve ? text
     : paragraph !== null && paragraph.ownSegmentBreaks ? removeItemsSkippableSegmentBreaks(text, paragraph.starts, profile, language, scanStarts ?? missing())
     : removeSkippableSegmentBreaks(text, profile, language)
-  if (paragraph !== null && (scanStarts ?? missing()).length === 0) for (let k = 0; k < paragraph.starts.length; k++) (scanStarts ?? missing()).push(paragraph.starts[k] ?? missing())
+  if (paragraph !== null && (scanStarts ?? missing()).length === 0) for (let k = 0; k < paragraph.starts.length; k++) (scanStarts ?? missing()).push(paragraph.starts[k]!)
   let normalized = preserve ? normalizeWhitespacePreWrap(text) : collapseWhitespaceNormal(source)
   const keepAll = wordBreak === 'keep-all'
   let breaks: Uint8Array
