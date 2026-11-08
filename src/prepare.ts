@@ -82,8 +82,7 @@ const controlCharacterRe = /^[\p{Cc}\u2028\u2029]$/u
 function needsComplexTextPath(text: string): boolean {
   let previousIsEmoji = false
   for (let i = 0; i < text.length;) {
-    const codePoint = text.codePointAt(i)
-    if (codePoint === undefined) throw new RangeError('missing value')
+    const codePoint = text.codePointAt(i)!
     i += codePoint > 0xFFFF ? 2 : 1
     if (codePoint === 0x200D && previousIsEmoji) return true
     previousIsEmoji = codePoint > 0xFFFF && extendedPictographicRe.test(String.fromCodePoint(codePoint))
