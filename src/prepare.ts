@@ -518,7 +518,7 @@ export function measureAnalysis(
           }
           if (engineProfile.letterSpacesGlyphs) {
             extraSpacings = textMetrics.extraSpacings ??= needsComplexTextPath(text) ? getExtraSpacings(text, fontMeasurement) : noExtraSpacings
-            for (let k = 0; k < extraSpacings.length; k++) width += (extraSpacings[k] ?? missing()) * letterSpacing
+            for (let k = 0; k < extraSpacings.length; k++) width += extraSpacings[k]! * letterSpacing
           }
         }
         // Under break-word, Blink retries an overflowing line with a break allowed between
@@ -557,7 +557,7 @@ export function measureAnalysis(
           fitAdvances = fitAdvances.slice()
           for (let k = 0; k < extraSpacings.length; k++) {
             const fitAdvancesStore = fitAdvances
-            const fitAdvancesValue = (fitAdvancesStore[k] ?? missing()) + (extraSpacings[k] ?? missing()) * letterSpacing
+            const fitAdvancesValue = (fitAdvancesStore[k] ?? missing()) + extraSpacings[k]! * letterSpacing
             if ((k & 0x7fffffff) !== k || k > fitAdvancesStore.length) throw new RangeError('index')
             fitAdvancesStore[k] = fitAdvancesValue
           }
@@ -565,8 +565,7 @@ export function measureAnalysis(
         if (unspaced !== null) {
           fitAdvances = fitAdvances.slice()
           for (let k = 0; k < unspaced.length; k++) {
-            const idx = unspaced[k]
-            if (idx === undefined) throw new RangeError('missing value')
+            const idx = unspaced[k]!
             const fitAdvancesStore = fitAdvances
             const fitAdvancesValue = (fitAdvancesStore[idx] ?? missing()) - letterSpacing
             if ((idx & 0x7fffffff) !== idx || idx > fitAdvancesStore.length) throw new RangeError('index')
