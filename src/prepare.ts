@@ -170,7 +170,7 @@ function mayHoldCursive(text: string): boolean {
 // How far a text's script runs are read, the scripts the run there can be in, and each
 // bracket open there: its opening character, then the script of the run it was opened in,
 // 0 while that run goes on.
-type ScriptRuns = { read: number, scripts: number, openBrackets: number[] }
+type ScriptRuns = { read: number, scripts: number, /** @stable */ readonly openBrackets: number[] }
 
 // The scripts of the run text[to - 1] is in, read on from the last call as
 // ScriptRunIterator::Consume reads them (script_run_iterator.cc:325-429): a run keeps the

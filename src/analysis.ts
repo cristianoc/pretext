@@ -73,9 +73,9 @@ export const SEGMENT_KINDS: readonly SegmentBreakKind[] = [
 export type TextAnalysis = {
   normalized: string
   spaceSources: Uint16Array | null
-  texts: string[]
-  starts: number[]
-  flags: number[]
+  /** @stable */ readonly texts: string[]
+  /** @stable */ readonly starts: number[]
+  /** @stable */ readonly flags: number[]
   hasUnbroken: boolean
 }
 
