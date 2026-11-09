@@ -337,6 +337,7 @@ function isControlSegmentCode(code: number): boolean {
 // A run of them ends where an item of a rich-inline paragraph starts inside it, and an item that
 // starts with one starts a text segment with the text after it, as a chunk does, after the break
 // the scan gives at the run, so its fragments keep the controls it starts with.
+/** @ensures result.texts.length === result.flags.length && result.starts.length === result.flags.length */
 function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], hangTabs: boolean, dropsBidiControl: boolean): TextAnalysis {
   const oneCluster = scan === 'gecko' ? ONE_CLUSTER : 0
   const starts: number[] = []
@@ -440,10 +441,12 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // where measurement reads it, Firefox's rich-inline preparation ran 11-19% slower (RESEARCH.md,
   // Keeping Work Bounded).
   const texts: string[] = []
+  /** @invariant safeInteger(j) && safeInteger(count) && texts.length === j && count === flags.length && starts.length === flags.length */
   for (let j = 0; j < count; j++) texts.push(normalized.slice(starts[j], j + 1 < count ? starts[j + 1] : normalized.length))
   return { normalized, spaceSources, texts, starts, flags, hasUnbroken }
 }
 
+/** @ensures result.texts.length === result.flags.length && result.starts.length === result.flags.length */
 export function analyzeText(
   text: string,
   profile: AnalysisProfile,
