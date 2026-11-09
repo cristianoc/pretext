@@ -180,7 +180,7 @@ type ScriptRuns = { read: number, scripts: number, /** @stable */ readonly openB
 // that run has ended, among the last 32 opened, and closes the ones opened since; its own
 // stays open, so a second closing bracket goes back to that run too (OpenBracket,
 // CloseBracket and FixupStack, :431-489, :567-590).
-function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
+function readScriptRuns(runs: ScriptRuns, text: string, to: number): Modifies<{ values: "any"; stores: "grow"; "runs.openBrackets[*]": "any" }, number> {
   const { openBrackets } = runs
   while (runs.read < to || (runs.scripts === ANY_SCRIPT && runs.read < text.length)) {
     const c = text.codePointAt(runs.read)
@@ -219,7 +219,7 @@ function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
 // space that has one script names that run, so the search back starts before the space, at
 // text[at - 2], and ends there; a closing bracket, or a character of several scripts, takes its
 // script from the runs before it, which are then read.
-function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: number): boolean {
+function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: number): Modifies<{ values: "any"; stores: "grow"; "runs.openBrackets[*]": "any" }, boolean> {
   let scripts = getScriptFactsAt(text, at) & ANY_SCRIPT
   // A default ignorable with a script of its own, as U+3164, counts as the word's first letter.
   for (let first = at; scripts === ANY_SCRIPT && first + 1 < end && hasProperty(text.charCodeAt(first), DEFAULT_IGNORABLE); first++) scripts = getScriptFactsAt(text, first + 1) & ANY_SCRIPT
@@ -255,7 +255,7 @@ function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: n
 // character is a letter of a cursive script; in Blink those whose first character is in a
 // run that resolves to one and isn't a no-break space. A rich item's text starts a run of
 // its own (ENGINE_FOLLOWUPS.md, Letter spacing).
-function getUnspacedGraphemes(text: string, start: number, end: number, graphemeTable: GraphemeTable, runs: ScriptRuns | null): number[] | null {
+function getUnspacedGraphemes(text: string, start: number, end: number, graphemeTable: GraphemeTable, runs: ScriptRuns | null): Modifies<{ values: "any"; stores: "grow"; "runs.openBrackets[*]": "any" }, number[] | null> {
   const ends = new Int32Array(end - start)
   const count = findGraphemeEnds(graphemeTable, text, start, end, ends)
   let unspaced: number[] | null = null
