@@ -299,15 +299,15 @@ export type ParagraphLists = {
 // direction, where Safari measures the word alone (ENGINE_FOLLOWUPS.md, Bidi
 // levels, direction and script runs). Returns the zero-width breaks between the
 // text and the space, or null when the text takes no kerning.
+/** @requires safeInteger(analysisIndex) && 0 <= analysisIndex && analysisIndex < to && safeInteger(to) && to <= analysis.flags.length && to <= analysis.starts.length */
 function getFollowingSpaceTail(analysis: TextAnalysis, analysisIndex: number, to: number): string | null {
   const { normalized, spaceSources, starts, flags } = analysis
   let next = analysisIndex + 1
-  while (next < to && ((flags[next] ?? missing()) & KIND_BITS) === ZERO_WIDTH_BREAK) next++
+  while (next < to && (flags[next]! & KIND_BITS) === ZERO_WIDTH_BREAK) next++
   if (next >= to) return null
-  const nextKind = (flags[next] ?? missing()) & KIND_BITS
+  const nextKind = flags[next]! & KIND_BITS
   // A collapsed space's first source character: WebKit looks at the source after a text item.
-  const spaceStart = starts[next]
-  if (spaceStart === undefined) throw new RangeError('missing value')
+  const spaceStart = starts[next]!
   if ((nextKind !== SPACE && nextKind !== PRESERVED_SPACE) || (spaceSources === null ? normalized.charCodeAt(spaceStart) : (spaceSources[spaceStart] ?? missing())) !== 0x20) return null
   return normalized.slice(starts[analysisIndex + 1], spaceStart)
 }
@@ -325,14 +325,14 @@ function getTailKerning(item: string, measurement: FontMeasurement, spaceWidth: 
 // A line counts it for the soft hyphens it passes, and in Gecko for the one it
 // ends at (returnsFromUnfitHyphen in src/line-break.ts). WebKit's return fits each
 // side as measured alone and takes none (unfitHyphenRetreat).
+/** @requires safeInteger(analysisIndex) && 0 <= analysisIndex && analysisIndex < to && safeInteger(to) && to <= analysis.flags.length && to <= analysis.texts.length */
 function getJoinedNarrowing(analysis: TextAnalysis, analysisIndex: number, to: number, before: string | null, beforeMetrics: SegmentMetrics | null, measurement: FontMeasurement, emojiCorrection: number, lineFitEpsilon: number): number {
   if (before === null) return 0
   const { texts, flags } = analysis
   let next = analysisIndex + 1
-  while (next < to && ((flags[next] ?? missing()) & KIND_BITS) === SOFT_HYPHEN) next++
-  if (next >= to || ((flags[next] ?? missing()) & KIND_BITS) !== TEXT) return 0
-  const after = texts[next]
-  if (after === undefined) throw new RangeError('missing value')
+  while (next < to && (flags[next]! & KIND_BITS) === SOFT_HYPHEN) next++
+  if (next >= to || (flags[next]! & KIND_BITS) !== TEXT) return 0
+  const after = texts[next]!
   const apart = getCorrectedSegmentWidth(before, beforeMetrics ?? missing(), measurement, emojiCorrection) + getTextWidth(after, measurement, emojiCorrection)
   const together = getTextWidth(before + after, measurement, emojiCorrection)
   return apart - together > lineFitEpsilon ? apart - together : 0
@@ -708,12 +708,12 @@ export function measureAnalysis(
 // its kana takes the same in its advances (getSegmentFit). `widths` holds segments [from, to)
 // of the analysis from `base`, a rich-inline item's in its paragraph's, and `extras` holds
 // them from index 0; a kana that starts an item takes no kerning with the item before it.
+/** @requires safeInteger(from) && 0 <= from && safeInteger(to) && to <= analysis.flags.length && to <= analysis.starts.length */
 function addKanaKerning(extras: number[] | null, widths: number[], base: number, analysis: TextAnalysis, from: number, to: number, measurement: FontMeasurement, kernings: Float64Array): number[] | null {
   const { normalized, starts, flags } = analysis
   for (let i = from; i < to; i++) {
-    if (((flags[i] ?? missing()) & KIND_BITS) !== TEXT) continue
-    const start = starts[i]
-    if (start === undefined) throw new RangeError('missing value')
+    if ((flags[i]! & KIND_BITS) !== TEXT) continue
+    const start = starts[i]!
     const end = i + 1 < flags.length ? (starts[i + 1] ?? missing()) : normalized.length
     const at = base + i - from
     for (let k = i > from ? start : start + 1; k < end; k++) {
@@ -761,6 +761,7 @@ function addKanaKerning(extras: number[] | null, widths: number[], base: number,
 // the next item starts with, as the engines hang it wherever a line ends; a text's run before
 // a ZWSP, a soft hyphen or a character no line starts with doesn't yet (ENGINE_FOLLOWUPS.md,
 // Line edges).
+/** @requires safeInteger(from) && 0 <= from && safeInteger(to) && to <= analysis.flags.length && to <= analysis.starts.length */
 function addIdeographicSpaceHangs(
   trims: number[] | null,
   analysis: TextAnalysis,
@@ -773,13 +774,13 @@ function addIdeographicSpaceHangs(
   const { normalized, starts, flags } = analysis
   for (let i = from; i < to; i++) {
     const end = i + 1 < flags.length ? (starts[i + 1] ?? missing()) : normalized.length
-    if (((flags[i] ?? missing()) & KIND_BITS) !== TEXT || normalized.charCodeAt(end - 1) !== 0x3000) continue
+    if ((flags[i]! & KIND_BITS) !== TEXT || normalized.charCodeAt(end - 1) !== 0x3000) continue
     if (i + 1 < to) {
-      const next = (flags[i + 1] ?? missing()) & KIND_BITS
-      if (next !== HARD_BREAK && next !== SPACE && !(next === TEXT && ((flags[i + 1] ?? missing()) & UNBROKEN) === 0)) continue
+      const next = flags[i + 1]! & KIND_BITS
+      if (next !== HARD_BREAK && next !== SPACE && !(next === TEXT && (flags[i + 1]! & UNBROKEN) === 0)) continue
     }
     let start = end - 1
-    while (start > (starts[i] ?? missing()) && normalized.charCodeAt(start - 1) === 0x3000) start--
+    while (start > starts[i]! && normalized.charCodeAt(start - 1) === 0x3000) start--
     const run = normalized.slice(start, end)
     const afterSoftHyphen = i > 0 && start === starts[i] && normalized.charCodeAt(start - 1) === 0xAD
     const hang = getSegmentMetrics(run, measurement).width + run.length * letterSpacing - (afterSoftHyphen ? hyphenWidth : 0)
