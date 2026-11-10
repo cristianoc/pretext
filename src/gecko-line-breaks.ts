@@ -117,7 +117,7 @@ export function isDiscardable(ch: number, is8bit: boolean): boolean {
 }
 const isSpaceOrTab = (ch: number) => ch === 0x20 || ch === 0x09
 // IsSpaceOrTabOrSegmentBreak, nsTextFrameUtils.cpp:51-57: a white-space run's white space, which a CR or FF isn't.
-export const isSpaceOrTabOrSegmentBreak = (ch: number): boolean => ch === 0x20 || ch === 0x09 || ch === 0x0a
+export const isSpaceOrTabOrSegmentBreak = (ch: number): Modifies<{}, boolean> => ch === 0x20 || ch === 0x09 || ch === 0x0a
 
 // IsSpaceCombiningSequenceTail(const char16_t*, int32_t), nsTextFrameUtils.cpp:24-30, on code units.
 export function isSpaceCombiningSequenceTail(text: string, from: number): boolean {

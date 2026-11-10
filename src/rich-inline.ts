@@ -328,6 +328,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // Whether the paragraph holds an object of width 0.
   let hasEmptyObject = false
 
+  /** @invariant safeInteger(from) && safeInteger(count) && 0 <= from */
   for (let from = 0; from < count;) {
     // The item this segment starts in, and the segments that start in it.
     const offset = offsets[(analysis.starts[from] ?? missing())]
@@ -337,6 +338,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     while (itemSegments.length <= index) itemSegments.push(widths.length)
     const itemEnd = index + 1 < starts.length ? (starts[index + 1] ?? missing()) : source.length
     let to = from + 1
+    /** @invariant safeInteger(from) && safeInteger(to) && safeInteger(count) && 0 <= from && from < to && to <= count */
     while (to < count && (offsets[(analysis.starts[to] ?? missing())] ?? missing()) < itemEnd) to++
     const item = items[index]
     if (item === undefined) throw new RangeError('missing value')
@@ -491,6 +493,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // The item's segments, measured in its font onto the end of the paragraph's lists; `sub` holds
     // what else measurement gives them, from the item's first segment.
     const itemAt = widths.length
+    if (to > analysis.flags.length || to > analysis.starts.length || to > analysis.texts.length) throw new RangeError('index')
     const sub = measureAnalysis(analysis, from, to, item.font, null, letterSpacing, profile, language, true, lists)
     simple &&= sub.simpleLineCountFastPath
     if (readsItemFonts) {
