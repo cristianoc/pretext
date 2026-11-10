@@ -370,7 +370,7 @@ export function measureAnalysis(
   overflowBreaks: boolean,
   // The paragraph's lists for a rich-inline item, null for a text.
   paragraph: ParagraphLists | null,
-): PreparedText {
+): Modifies<{ values: "any"; stores: "grow" }, PreparedText> {
   const { normalized, texts, starts, flags } = analysis
   // The measured text and where it starts in the analysis's: what is asked of the whole text
   // is asked of it, and places in it count from its start.
