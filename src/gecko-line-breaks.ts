@@ -117,7 +117,7 @@ export function isDiscardable(ch: number, is8bit: boolean): boolean {
 }
 const isSpaceOrTab = (ch: number) => ch === 0x20 || ch === 0x09
 // IsSpaceOrTabOrSegmentBreak, nsTextFrameUtils.cpp:51-57: a white-space run's white space, which a CR or FF isn't.
-export const isSpaceOrTabOrSegmentBreak = (ch: number): boolean => ch === 0x20 || ch === 0x09 || ch === 0x0a
+export const isSpaceOrTabOrSegmentBreak = (ch: number): Modifies<{}, boolean> => ch === 0x20 || ch === 0x09 || ch === 0x0a
 
 // IsSpaceCombiningSequenceTail(const char16_t*, int32_t), nsTextFrameUtils.cpp:24-30, on code units.
 export function isSpaceCombiningSequenceTail(text: string, from: number): boolean {
@@ -410,9 +410,9 @@ function getComplexLanguage(u: number): number {
 function segmentComplex(units: number[]): number[] {
   const result: number[] = []
   for (let i = 0; i < units.length;) {
-    const language = getComplexLanguage(units[i] ?? missing())
+    const language = getComplexLanguage(units[i]!)
     let j = i + 1
-    while (j < units.length && getComplexLanguage(units[j] ?? missing()) === language) j++
+    while (j < units.length && getComplexLanguage(units[j]!) === language) j++
     if (language !== 0) {
       let slice = ''
       for (let k = i; k < j; k += 4096) slice += String.fromCharCode(...units.slice(k, Math.min(j, k + 4096)))
@@ -653,6 +653,7 @@ function getBreakStates(line: LineData, text: string, is8bit: boolean, afterLead
 // with no advance (transformText).
 export type GeckoLineBreaks = { breaks: Uint8Array, leftOut: Uint8Array | null, dropsBidiControl: boolean }
 
+/** @ensures result.breaks.length === source.length + 1 */
 export function getGeckoLineBreaks(
   source: string,
   preserveWhiteSpace: boolean,

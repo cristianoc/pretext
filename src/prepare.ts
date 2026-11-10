@@ -82,8 +82,7 @@ const controlCharacterRe = /^[\p{Cc}\u2028\u2029]$/u
 function needsComplexTextPath(text: string): boolean {
   let previousIsEmoji = false
   for (let i = 0; i < text.length;) {
-    const codePoint = text.codePointAt(i)
-    if (codePoint === undefined) throw new RangeError('missing value')
+    const codePoint = text.codePointAt(i)!
     i += codePoint > 0xFFFF ? 2 : 1
     if (codePoint === 0x200D && previousIsEmoji) return true
     previousIsEmoji = codePoint > 0xFFFF && extendedPictographicRe.test(String.fromCodePoint(codePoint))
@@ -162,7 +161,7 @@ function getScriptFactsAt(text: string, i: number): number {
 function mayHoldCursive(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     if (text.charCodeAt(i) < 0x80) continue
-    const facts = getScriptFacts(text.codePointAt(i) ?? missing())
+    const facts = getScriptFacts(text.codePointAt(i)!)
     if ((facts & ANY_SCRIPT) === CURSIVE_SCRIPT || (facts >> MARK_SCRIPTS_SHIFT & ANY_SCRIPT) === CURSIVE_SCRIPT) return true
   }
   return false
@@ -171,7 +170,7 @@ function mayHoldCursive(text: string): boolean {
 // How far a text's script runs are read, the scripts the run there can be in, and each
 // bracket open there: its opening character, then the script of the run it was opened in,
 // 0 while that run goes on.
-type ScriptRuns = { read: number, scripts: number, openBrackets: number[] }
+type ScriptRuns = { read: number, scripts: number, /** @stable */ readonly openBrackets: number[] }
 
 // The scripts of the run text[to - 1] is in, read on from the last call as
 // ScriptRunIterator::Consume reads them (script_run_iterator.cc:325-429): a run keeps the
@@ -181,7 +180,7 @@ type ScriptRuns = { read: number, scripts: number, openBrackets: number[] }
 // that run has ended, among the last 32 opened, and closes the ones opened since; its own
 // stays open, so a second closing bracket goes back to that run too (OpenBracket,
 // CloseBracket and FixupStack, :431-489, :567-590).
-function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
+function readScriptRuns(runs: ScriptRuns, text: string, to: number): Modifies<{ values: "any"; stores: "grow"; "runs.openBrackets[*]": "any" }, number> {
   const { openBrackets } = runs
   while (runs.read < to || (runs.scripts === ANY_SCRIPT && runs.read < text.length)) {
     const c = text.codePointAt(runs.read)
@@ -220,7 +219,7 @@ function readScriptRuns(runs: ScriptRuns, text: string, to: number): number {
 // space that has one script names that run, so the search back starts before the space, at
 // text[at - 2], and ends there; a closing bracket, or a character of several scripts, takes its
 // script from the runs before it, which are then read.
-function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: number): boolean {
+function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: number): Modifies<{ values: "any"; stores: "grow"; "runs.openBrackets[*]": "any" }, boolean> {
   let scripts = getScriptFactsAt(text, at) & ANY_SCRIPT
   // A default ignorable with a script of its own, as U+3164, counts as the word's first letter.
   for (let first = at; scripts === ANY_SCRIPT && first + 1 < end && hasProperty(text.charCodeAt(first), DEFAULT_IGNORABLE); first++) scripts = getScriptFactsAt(text, first + 1) & ANY_SCRIPT
@@ -256,7 +255,7 @@ function spaceSharesScriptRun(runs: ScriptRuns, text: string, at: number, end: n
 // character is a letter of a cursive script; in Blink those whose first character is in a
 // run that resolves to one and isn't a no-break space. A rich item's text starts a run of
 // its own (ENGINE_FOLLOWUPS.md, Letter spacing).
-function getUnspacedGraphemes(text: string, start: number, end: number, graphemeTable: GraphemeTable, runs: ScriptRuns | null): number[] | null {
+function getUnspacedGraphemes(text: string, start: number, end: number, graphemeTable: GraphemeTable, runs: ScriptRuns | null): Modifies<{ values: "any"; stores: "grow"; "runs.openBrackets[*]": "any" }, number[] | null> {
   const ends = new Int32Array(end - start)
   const count = findGraphemeEnds(graphemeTable, text, start, end, ends)
   let unspaced: number[] | null = null
@@ -355,6 +354,7 @@ function getTextSegmentWidth(text: string, textMetrics: SegmentMetrics, measurem
 // copy of its part of the analysis and no lists of its own to copy from. The handle returned
 // holds those lists; what else it holds is the measured segments' alone, each list from the
 // first of them.
+/** @requires safeInteger(from) && 0 <= from && from <= to && safeInteger(to) && to <= analysis.flags.length && to <= analysis.starts.length && to <= analysis.texts.length */
 export function measureAnalysis(
   analysis: TextAnalysis,
   from: number,
@@ -375,7 +375,7 @@ export function measureAnalysis(
   // The measured text and where it starts in the analysis's: what is asked of the whole text
   // is asked of it, and places in it count from its start.
   const ownStart = from === 0 ? 0 : (starts[from] ?? missing())
-  const own = from === 0 && to === flags.length ? normalized : to === from + 1 ? (texts[from] ?? missing()) : normalized.slice(ownStart, to < flags.length ? (starts[to] ?? missing()) : normalized.length)
+  const own = from === 0 && to === flags.length ? normalized : to === from + 1 ? texts[from]! : normalized.slice(ownStart, to < flags.length ? (starts[to] ?? missing()) : normalized.length)
   // A text's lists are made here, where they are filled, and not by its caller: V8 types a
   // list by what the `[]` that made it has seen, and with every caller making them, in a loop
   // that pushed, Chrome prepared long texts 5-11% slower and Firefox walked CJK lines 12%
@@ -422,6 +422,7 @@ export function measureAnalysis(
   let fontSpaceKerning = engineProfile.kernsAcrossCanvasWords && own.includes(' ') ? getFontSpaceKerning(fontMeasurement) : null
   if (fontSpaceKerning !== null && mixedDirectionRe.test(own)) fontSpaceKerning = null
   const scriptRuns: ScriptRuns = { read: 0, scripts: ANY_SCRIPT, openBrackets: [] }
+  const unspacedRuns = engineProfile.unspacedCursive === 'run' ? scriptRuns : null
   // What the word before a space adds to that space, the next segment.
   let spaceShare = 0
 
@@ -447,11 +448,13 @@ export function measureAnalysis(
   // they cost about 1% of preparing a text again in Safari 27, 1.9% at most in one run
   // (RESEARCH.md, Keeping Work Bounded, JavaScript Engines, under A list made where it is
   // filled; Decisions Log, 2026-10-09, a paragraph's lists).
+  /**
+   * @invariant safeInteger(mi) && safeInteger(from) && safeInteger(to) && from <= mi && to <= flags.length && to <= starts.length && to <= texts.length && flags !== scriptRuns.openBrackets && starts !== scriptRuns.openBrackets && texts !== scriptRuns.openBrackets
+   * @invariant unspacedRuns === null || flags !== unspacedRuns.openBrackets && starts !== unspacedRuns.openBrackets && texts !== unspacedRuns.openBrackets
+   */
   for (let mi = from, at = base; mi < to; mi++, at++) {
-    const text = texts[mi]
-    if (text === undefined) throw new RangeError('missing value')
-    const segment = flags[mi]
-    if (segment === undefined) throw new RangeError('missing value')
+    const text = texts[mi]!
+    const segment = flags[mi]!
     const kind = segment & KIND_BITS
     let width = 0
     // Graphemes that take letter spacing after them.
@@ -473,8 +476,8 @@ export function measureAnalysis(
         previousJoinableMetrics = textMetrics
         let followingSpaceKerning = followingSpaceTail === null || followingSpaceTail === '' ? 0 : getTailKerning(text + followingSpaceTail, fontMeasurement, spaceWidth)
         if (fontSpaceKerning !== null && textMetrics.spaceKerning !== noSpaceKerning) {
-          const spaceBefore = mi > from && isSpaceKind((flags[mi - 1] ?? missing()) & KIND_BITS)
-          const spaceAfter = mi + 1 < to && isSpaceKind((flags[mi + 1] ?? missing()) & KIND_BITS)
+          const spaceBefore = mi > from && isSpaceKind(flags[mi - 1]! & KIND_BITS)
+          const spaceAfter = mi + 1 < to && isSpaceKind(flags[mi + 1]! & KIND_BITS)
           if (spaceBefore || spaceAfter) {
             const kerning = textMetrics.spaceKerning ?? getSpaceKerning(text, textMetrics, fontMeasurement, fontSpaceKerning)
             if (spaceAfter) {
@@ -495,7 +498,7 @@ export function measureAnalysis(
             // which kerns with nothing.
             if (spaceBefore && kerning.before !== 0 &&
               !(((flags[mi - 1] ?? missing()) & KIND_BITS) === PRESERVED_SPACE && (mi === from + 1 || ((flags[mi - 2] ?? missing()) & KIND_BITS) === HARD_BREAK)) &&
-              spaceSharesScriptRun(scriptRuns, own, (starts[mi] ?? missing()) - ownStart, (starts[mi] ?? missing()) - ownStart + text.length)) {
+              spaceSharesScriptRun(scriptRuns, own, starts[mi]! - ownStart, starts[mi]! - ownStart + text.length)) {
               const idx = at - 1
               const widthsValue = (widths[idx] ?? missing()) + kerning.before
               if ((idx & 0x7fffffff) !== idx || idx > widths.length) throw new RangeError('index')
@@ -514,12 +517,12 @@ export function measureAnalysis(
         if (hasLetterSpacing) {
           spacingGraphemeCount = countRenderedSpacingGraphemes(text, kind, engineProfile.graphemeTable)
           if (cursiveSpacing) {
-            unspaced = getUnspacedGraphemes(own, (starts[mi] ?? missing()) - ownStart, (starts[mi] ?? missing()) - ownStart + text.length, engineProfile.graphemeTable, engineProfile.unspacedCursive === 'run' ? scriptRuns : null)
+            unspaced = getUnspacedGraphemes(own, starts[mi]! - ownStart, starts[mi]! - ownStart + text.length, engineProfile.graphemeTable, unspacedRuns)
             if (unspaced !== null) width -= unspaced.length * letterSpacing
           }
           if (engineProfile.letterSpacesGlyphs) {
             extraSpacings = textMetrics.extraSpacings ??= needsComplexTextPath(text) ? getExtraSpacings(text, fontMeasurement) : noExtraSpacings
-            for (let k = 0; k < extraSpacings.length; k++) width += (extraSpacings[k] ?? missing()) * letterSpacing
+            for (let k = 0; k < extraSpacings.length; k++) width += extraSpacings[k]! * letterSpacing
           }
         }
         // Under break-word, Blink retries an overflowing line with a break allowed between
@@ -558,7 +561,7 @@ export function measureAnalysis(
           fitAdvances = fitAdvances.slice()
           for (let k = 0; k < extraSpacings.length; k++) {
             const fitAdvancesStore = fitAdvances
-            const fitAdvancesValue = (fitAdvancesStore[k] ?? missing()) + (extraSpacings[k] ?? missing()) * letterSpacing
+            const fitAdvancesValue = (fitAdvancesStore[k] ?? missing()) + extraSpacings[k]! * letterSpacing
             if ((k & 0x7fffffff) !== k || k > fitAdvancesStore.length) throw new RangeError('index')
             fitAdvancesStore[k] = fitAdvancesValue
           }
@@ -566,8 +569,7 @@ export function measureAnalysis(
         if (unspaced !== null) {
           fitAdvances = fitAdvances.slice()
           for (let k = 0; k < unspaced.length; k++) {
-            const idx = unspaced[k]
-            if (idx === undefined) throw new RangeError('missing value')
+            const idx = unspaced[k]!
             const fitAdvancesStore = fitAdvances
             const fitAdvancesValue = (fitAdvancesStore[idx] ?? missing()) - letterSpacing
             if ((idx & 0x7fffffff) !== idx || idx > fitAdvancesStore.length) throw new RangeError('index')
@@ -593,9 +595,9 @@ export function measureAnalysis(
         // combining marks after it, and the complex text path spaces it. Complex
         // text shares the item only when its direction matches the page's, which
         // preparation cannot see, so NEL next to complex text keeps its spacing.
-        const nextText = mi + 1 < to ? (texts[mi + 1] ?? missing()) : ''
+        const nextText = mi + 1 < to ? texts[mi + 1]! : ''
         if (hasLetterSpacing && (
-          (mi > from && ((flags[mi - 1] ?? missing()) & KIND_BITS) === TEXT && needsComplexTextPath(texts[mi - 1] ?? missing())) ||
+          (mi > from && (flags[mi - 1]! & KIND_BITS) === TEXT && needsComplexTextPath(texts[mi - 1]!)) ||
           (leadingCombiningMarkRe().test(nextText) && needsComplexTextPath(nextText))
         )) spacingGraphemeCount = 1
         break
@@ -657,7 +659,7 @@ export function measureAnalysis(
     const trims = hanKerning.widthTrims
     if (trims !== null) for (let i = 0; i < trims.length; i++) {
       const idx = base + i
-      const widthsValue = (widths[idx] ?? missing()) - (trims[i] ?? missing())
+      const widthsValue = (widths[idx] ?? missing()) - trims[i]!
       if ((idx & 0x7fffffff) !== idx || idx > widths.length) throw new RangeError('index')
       widths[idx] = widthsValue
     }

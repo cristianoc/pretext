@@ -374,8 +374,8 @@ export function countPreparedLines(prepared: PreparedLineData, maxWidth: number)
     let g = 0
     while (g < advances.length) {
       if (startExtras !== null) lineW += (startExtras[g] ?? missing())
-      lineW += (advances[g++] ?? missing())
-      while (g < advances.length && lineW + (advances[g] ?? missing()) <= fitLimit) lineW += (advances[g++] ?? missing())
+      lineW += advances[g++]!
+      while (g < advances.length && lineW + advances[g]! <= fitLimit) lineW += advances[g++]!
       if (g < advances.length) {
         count++
         lineW = 0

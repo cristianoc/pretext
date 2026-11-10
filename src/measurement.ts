@@ -513,12 +513,12 @@ function getWebKitGenericFamilies(language: string, ctx: CanvasRenderingContext2
   const families: string[] = []
   for (let i = 0; i < row.length; i++) {
     // Keywords with the same entry share its family, and the context is asked once.
-    const first = row.indexOf(row[i] ?? missing())
+    const first = row.indexOf(row[i]!)
     if (first < i) {
       families.push(families[first] ?? missing())
       continue
     }
-    const name = webkitGenericFamilyNames[(row[i] ?? missing())]
+    const name = webkitGenericFamilyNames[row[i]!]
     if (name === undefined) throw new RangeError('missing value')
     const pair = name.indexOf('|')
     const family = pair < 0 ? name : hasFamily(ctx, name.slice(0, pair)) ? name.slice(0, pair) : name.slice(pair + 1)
@@ -551,8 +551,7 @@ function getCanvasFont(font: string, families: readonly string[]): string {
   // A quoted family name, or an unquoted generic keyword with what precedes it.
   return font.slice(0, start) + font.slice(start).replace(/("[^"]*"|'[^']*')|(^|,)(\s*)(serif|sans-serif|cursive|fantasy|monospace)(?=\s*(?:,|$))/gi, (item: string, quoted: string | undefined, separator: string | undefined, space: string | undefined, keyword: string | undefined) => {
     if (quoted !== undefined || separator === undefined || space === undefined || keyword === undefined) return item
-    const named = families[genericKeywords.indexOf(keyword.toLowerCase())]
-    if (named === undefined) throw new RangeError('missing value')
+    const named = families[genericKeywords.indexOf(keyword.toLowerCase())] ?? ''
     return named === '' ? item : separator + space + named
   })
 }
@@ -1335,7 +1334,7 @@ function isLigature(pair: string, measurement: FontMeasurement): boolean {
 // Whether a segment's advances add up to its width, within the rounding of Canvas's widths.
 function addUpTo(advances: readonly number[], width: number): boolean {
   let sum = 0
-  for (let i = 0; i < advances.length; i++) sum += (advances[i] ?? missing())
+  for (let i = 0; i < advances.length; i++) sum += advances[i]!
   return Math.abs(sum - width) <= width * WORD_SUM_ROUNDING
 }
 

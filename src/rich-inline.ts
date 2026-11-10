@@ -21,7 +21,7 @@ import {
   type ParagraphItems,
   type WhiteSpaceMode,
 } from './analysis.js'
-import { buildLineTextFromRange, buildRangeText, getGraphemeEnds, type PreparedSegments } from './line-text.js'
+import { buildLineTextFromRange, buildRangeText, getGraphemeStart, type PreparedSegments } from './line-text.js'
 import {
   getItemTabAdvance,
   normalizeMaxWidth,
@@ -198,7 +198,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // dropped (below).
   let onlyIndex = -1
   for (let index = 0; index < items.length; index++) {
-    if ((items[index] ?? missing()).text === '') continue
+    if (items[index]!.text === '') continue
     if (onlyIndex >= 0) {
       onlyIndex = -1
       break
@@ -247,8 +247,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // Whether an item may make a line narrower: under a negative letter spacing or extraWidth.
   let mayNarrow = false
   for (let index = 0; index < items.length; index++) {
-    const item = items[index]
-    if (item === undefined) throw new RangeError('missing value')
+    const item = items[index]!
     starts.push(source.length)
     if (item.text === undefined) {
       // A width that isn't finite would give lines of width NaN or Infinity, and Chrome breaks lines
@@ -329,6 +328,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // Whether the paragraph holds an object of width 0.
   let hasEmptyObject = false
 
+  /** @invariant safeInteger(from) && safeInteger(count) && 0 <= from */
   for (let from = 0; from < count;) {
     // The item this segment starts in, and the segments that start in it.
     const offset = offsets[(analysis.starts[from] ?? missing())]
@@ -338,6 +338,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     while (itemSegments.length <= index) itemSegments.push(widths.length)
     const itemEnd = index + 1 < starts.length ? (starts[index + 1] ?? missing()) : source.length
     let to = from + 1
+    /** @invariant safeInteger(from) && safeInteger(to) && safeInteger(count) && 0 <= from && from < to && to <= count */
     while (to < count && (offsets[(analysis.starts[to] ?? missing())] ?? missing()) < itemEnd) to++
     const item = items[index]
     if (item === undefined) throw new RangeError('missing value')
@@ -365,8 +366,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         // The chip's text as a line of it paints it (buildLineTextFromRange).
         for (let i = 0; i < ownAnalysis.texts.length; i++) {
           const kind = (own.segmentFlags[i] ?? missing()) & KIND_BITS
-          const ownText = ownAnalysis.texts[i]
-          if (ownText === undefined) throw new RangeError('missing value')
+          const ownText = ownAnalysis.texts[i]!
           if (kind !== SOFT_HYPHEN && kind !== HARD_BREAK && !((kind === ZERO_WIDTH_GLUE || kind === ZERO_WIDTH_BREAK) && ownText.charCodeAt(0) === 0x00AD)) text += ownText
         }
         while (isCollapsibleSpaceCode(item.text.charCodeAt(textStart))) textStart++
@@ -493,6 +493,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     // The item's segments, measured in its font onto the end of the paragraph's lists; `sub` holds
     // what else measurement gives them, from the item's first segment.
     const itemAt = widths.length
+    if (to > analysis.flags.length || to > analysis.starts.length || to > analysis.texts.length) throw new RangeError('index')
     const sub = measureAnalysis(analysis, from, to, item.font, null, letterSpacing, profile, language, true, lists)
     simple &&= sub.simpleLineCountFastPath
     if (readsItemFonts) {
@@ -518,12 +519,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
           advances = advances.slice()
           if ((at & 0x7fffffff) !== at || at > breakableFitAdvances.length) throw new RangeError('index')
           breakableFitAdvances[at] = advances
-          if (spaced) for (let g = 0; g < advances.length; g++) {
-            const advancesStore = advances
-            const advancesValue = (advancesStore[g] ?? missing()) + letterSpacing
-            if ((g & 0x7fffffff) !== g || g > advancesStore.length) throw new RangeError('index')
-            advancesStore[g] = advancesValue
-          }
+          if (spaced) for (let g = 0; g < advances.length; g++) advances[g] = advances[g]! + letterSpacing
           if (holdsExtra) advances[0] = (advances[0] ?? missing()) + extraWidth
         }
         if (spaced) {
@@ -772,8 +768,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
 function getHyphenRooms(hyphenWidths: number[], itemSegments: number[], segmentItems: Int32Array): number[] {
   const rooms: number[] = []
   for (let i = 0; i < segmentItems.length; i++) {
-    const index = segmentItems[i]
-    if (index === undefined) throw new RangeError('missing value')
+    const index = segmentItems[i]!
     rooms.push(i === itemSegments[index] ? 0 : (hyphenWidths[index] ?? missing()))
   }
   rooms.push(0)
@@ -1182,11 +1177,10 @@ function createLine(
   if (fragment !== null) fragment.occupiedWidth = occupiedWidth
 
   let rest = lineW - width
-  if (rest < 0 && fragments.length > 0) (fragments[fragments.length - 1] ?? missing()).occupiedWidth -= rest
+  if (rest < 0 && fragments.length > 0) fragments[fragments.length - 1]!.occupiedWidth -= rest
   const openingEdges = items.openingEdges
   for (let k = fragments.length - 1; k >= 0 && rest > 0; k--) {
-    const last = fragments[k]
-    if (last === undefined) throw new RangeError('missing value')
+    const last = fragments[k]!
     // The edge of a padded opening stays painted: it is the first segment of its item, so of a fragment.
     const edge = openingEdges === null || last.start.graphemeIndex > 0 ? 0 : (openingEdges[(itemSegments[last.itemIndex] ?? missing()) + last.start.segmentIndex] ?? missing())
     if (last.occupiedWidth > edge) {
@@ -1293,7 +1287,9 @@ function findSegmentSources(flow: InternalPreparedRichInline): TextSources {
 function getSourceOffset(sourceStarts: number[], sourceUnits: (number[] | null)[] | null, segmentIndex: number, unit: number): number {
   const units = sourceUnits === null ? null : sourceUnits[segmentIndex]
   if (units === undefined) throw new RangeError('missing value')
-  return units === null ? (sourceStarts[segmentIndex] ?? missing()) + unit : (units[unit] ?? missing())
+  if (units === null) return (sourceStarts[segmentIndex] ?? missing()) + unit
+  // The segment's end, where a grapheme start past its last grapheme stops: just past its last unit.
+  return units[unit] ?? (units.length > 0 ? (units[units.length - 1] ?? missing()) + 1 : (sourceStarts[segmentIndex] ?? missing()))
 }
 
 // Bridge from cheap range walking to full fragment text. Lets callers do
@@ -1311,8 +1307,7 @@ export function materializeRichInlineLineRange(
   const fragments: RichInlineFragment[] = []
 
   for (let i = 0; i < line.fragments.length; i++) {
-    const fragment = line.fragments[i]
-    if (fragment === undefined) throw new RangeError('missing value')
+    const fragment = line.fragments[i]!
     const first = itemSegments[fragment.itemIndex]
     if (first === undefined || fragment.itemIndex + 1 >= itemSegments.length) throw new Error('Missing rich-text inline item for fragment')
     // A range kept from a longer paragraph can end past its item in this one: its text stops at the item's end.
@@ -1325,9 +1320,9 @@ export function materializeRichInlineLineRange(
     // Only the fragment a line ends with shows the hyphen of a soft hyphen it ends at.
     const endsLine = i === line.fragments.length - 1 && endSegmentIndex === lineEndSegmentIndex && endGraphemeIndex === line.end.graphemeIndex
     let sourceStart = startSegmentIndex < itemEnd ? (sourceStarts[startSegmentIndex] ?? missing()) : startSegmentIndex > first ? ((sourceEnds ?? missing())[startSegmentIndex - 1] ?? missing()) : 0
-    if (startGraphemeIndex > 0 && startSegmentIndex < itemEnd) sourceStart = getSourceOffset(sourceStarts, sourceUnits, startSegmentIndex, getGraphemeEnds(data, startSegmentIndex)[startGraphemeIndex - 1] ?? missing())
+    if (startGraphemeIndex > 0 && startSegmentIndex < itemEnd) sourceStart = getSourceOffset(sourceStarts, sourceUnits, startSegmentIndex, getGraphemeStart(data, startSegmentIndex, startGraphemeIndex))
     let sourceEnd = sourceStart
-    if (endGraphemeIndex > 0) sourceEnd = getSourceOffset(sourceStarts, sourceUnits, endSegmentIndex, (getGraphemeEnds(data, endSegmentIndex)[endGraphemeIndex - 1] ?? missing()) - 1) + 1
+    if (endGraphemeIndex > 0) sourceEnd = getSourceOffset(sourceStarts, sourceUnits, endSegmentIndex, getGraphemeStart(data, endSegmentIndex, endGraphemeIndex) - 1) + 1
     else if (endSegmentIndex > startSegmentIndex) sourceEnd = (sourceEnds ?? missing())[endSegmentIndex - 1] ?? missing()
     const materialized: InternalRichInlineFragment = {
       itemIndex: fragment.itemIndex,

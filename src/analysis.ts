@@ -73,9 +73,9 @@ export const SEGMENT_KINDS: readonly SegmentBreakKind[] = [
 export type TextAnalysis = {
   normalized: string
   spaceSources: Uint16Array | null
-  texts: string[]
-  starts: number[]
-  flags: number[]
+  /** @stable */ readonly texts: string[]
+  /** @stable */ readonly starts: number[]
+  /** @stable */ readonly flags: number[]
   hasUnbroken: boolean
 }
 
@@ -165,8 +165,11 @@ export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProf
 // run reads through the bidi controls in it and after it (TransformText, nsTextFrameUtils.cpp:
 // 319-345), so there it is the first white space after the last character that is neither, and
 // the controls stay.
+/** @requires safeInteger(from) && 0 <= from
+ * @ensures safeInteger(result) && 0 <= result && result <= text.length */
 function getTrailingCollapsibleStart(text: string, from: number, profile: AnalysisProfile): number {
   let start = text.length
+  /** @invariant safeInteger(start) && 0 <= start && start <= text.length */
   for (let i = text.length - 1; i >= from; i--) {
     const code = text.charCodeAt(i)
     if (isCollapsibleSpaceCode(code)) start = i
@@ -202,6 +205,7 @@ function normalizeWhitespacePreWrap(text: string): string {
 
 const combiningMarkRe = /\p{M}/u
 
+/** @ensures safeInteger(result) && result >= 0 && result <= 15 */
 function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if (whiteSpace === 'pre-wrap') {
     if (code === 0x20) return PRESERVED_SPACE
@@ -278,6 +282,7 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 // without a hyphen, and Firefox, which drops soft hyphens from its text runs, has nothing there
 // (DROPPED). One with only soft hyphens before it on its chunk stays a soft hyphen: no line ends
 // at a chunk's start, and a line's start leaves either out.
+/** @ensures safeInteger(result) && result >= 0 && result <= 15 */
 function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if ((code === 0x2028 || code === 0x2029) && ((breaks[i + 1] ?? missing()) & FORCED_BREAK) !== 0) return HARD_BREAK
   if (code === 0x00AD && ((breaks[i + 1] ?? missing()) & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
@@ -332,6 +337,7 @@ function isControlSegmentCode(code: number): boolean {
 // A run of them ends where an item of a rich-inline paragraph starts inside it, and an item that
 // starts with one starts a text segment with the text after it, as a chunk does, after the break
 // the scan gives at the run, so its fragments keep the controls it starts with.
+/** @ensures result.texts.length === result.flags.length && result.starts.length === result.flags.length */
 function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | null, breaks: Uint8Array, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan'], hangTabs: boolean, dropsBidiControl: boolean): TextAnalysis {
   const oneCluster = scan === 'gecko' ? ONE_CLUSTER : 0
   const starts: number[] = []
@@ -344,6 +350,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   let droppedEnd = -1
   // The last segment's kind, -1 before the first unit, which starts one.
   let lastKind = -1
+  /** @invariant starts.length === flags.length && safeInteger(lastKind) && lastKind < 16 * flags.length */
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
     if (dropsBidiControl && i < droppedEnd) continue
@@ -383,12 +390,7 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
       ((breaks[i] ?? missing()) & (BREAK | ITEM_START)) === 0 && !alone && !lastAlone && !(markRun && !combiningMarkRe.test(normalized[i] ?? missing())) &&
       gathersKind(kind) && kind === lastKind
     ) {
-      if (((breaks[i] ?? missing()) & CLUSTER_START) !== 0) {
-        const idx = flags.length - 1
-        const flagsValue = (flags[idx] ?? missing()) & ~ONE_CLUSTER
-        if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
-        flags[idx] = flagsValue
-      }
+      if (((breaks[i] ?? missing()) & CLUSTER_START) !== 0) flags[flags.length - 1] = flags[flags.length - 1]! & ~ONE_CLUSTER
       continue
     }
     markRun = unbroken && kind === TEXT && combiningMarkRe.test(normalized[i] ?? missing()) &&
@@ -418,46 +420,33 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // zero-width break (classifySegmentUnit) is left as it was.
   let hasUnbroken = false
   const count = flags.length
+  /** @invariant safeInteger(j) && safeInteger(count) && j + 2 <= count && count === flags.length */
   for (let j = count - 2; j >= 0; j--) {
-    const kind = (flags[j] ?? missing()) & KIND_BITS
-    const next = (flags[j + 1] ?? missing()) & KIND_BITS
+    const kind = flags[j]! & KIND_BITS
+    const next = flags[j + 1]! & KIND_BITS
     if (((breaks[(starts[j + 1] ?? missing())] ?? missing()) & BREAK) !== 0 || kind === HARD_BREAK) continue
     if (!hangTabs && (next === TAB || (next === PRESERVED_SPACE && kind === TAB))) {
       if (kind === SOFT_HYPHEN) continue
     } else if (next === TEXT || next === ZERO_WIDTH_GLUE || next === CONTROL) {
-      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) {
-        const flagsValue = (flags[j] ?? missing()) & ~KIND_BITS | ZERO_WIDTH_GLUE
-        if ((j & 0x7fffffff) !== j || j > flags.length) throw new RangeError('index')
-        flags[j] = flagsValue
-      }
+      if (kind === ZERO_WIDTH_BREAK || kind === SOFT_HYPHEN) flags[j] = flags[j]! & ~KIND_BITS | ZERO_WIDTH_GLUE
     } else {
-      if (next === ZERO_WIDTH_BREAK && kind === ZERO_WIDTH_BREAK && normalized.charCodeAt(starts[j + 1] ?? missing()) === 0x200B) {
-        const idx = j + 1
-        const flagsValue = (flags[idx] ?? missing()) | UNBROKEN
-        if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
-        flags[idx] = flagsValue
-      }
+      if (next === ZERO_WIDTH_BREAK && kind === ZERO_WIDTH_BREAK && normalized.charCodeAt(starts[j + 1] ?? missing()) === 0x200B) flags[j + 1] = flags[j + 1]! | UNBROKEN
       continue
     }
-    const idx = j + 1
-    const flagsValue = (flags[idx] ?? missing()) | UNBROKEN
-    if ((idx & 0x7fffffff) !== idx || idx > flags.length) throw new RangeError('index')
-    flags[idx] = flagsValue
+    flags[j + 1] = flags[j + 1]! | UNBROKEN
     hasUnbroken = true
   }
-  if (hasUnbroken) for (let j = 0; j < count; j++) if (((flags[j] ?? missing()) & UNBROKEN) === 0) {
-    const flagsValue = (flags[j] ?? missing()) | RETURNABLE
-    if ((j & 0x7fffffff) !== j || j > flags.length) throw new RangeError('index')
-    flags[j] = flagsValue
-  }
+  if (hasUnbroken) for (let j = 0; j < count; j++) if ((flags[j]! & UNBROKEN) === 0) flags[j] = flags[j]! | RETURNABLE
   // Each segment's text, sliced once here for measurement and the neighbours it reads: sliced
   // where measurement reads it, Firefox's rich-inline preparation ran 11-19% slower (RESEARCH.md,
   // Keeping Work Bounded).
   const texts: string[] = []
+  /** @invariant safeInteger(j) && safeInteger(count) && texts.length === j && count === flags.length && starts.length === flags.length */
   for (let j = 0; j < count; j++) texts.push(normalized.slice(starts[j], j + 1 < count ? starts[j + 1] : normalized.length))
   return { normalized, spaceSources, texts, starts, flags, hasUnbroken }
 }
 
+/** @ensures result.texts.length === result.flags.length && result.starts.length === result.flags.length */
 export function analyzeText(
   text: string,
   profile: AnalysisProfile,
@@ -477,7 +466,7 @@ export function analyzeText(
   let source = preserve ? text
     : paragraph !== null && paragraph.ownSegmentBreaks ? removeItemsSkippableSegmentBreaks(text, paragraph.starts, profile, language, scanStarts ?? missing())
     : removeSkippableSegmentBreaks(text, profile, language)
-  if (paragraph !== null && (scanStarts ?? missing()).length === 0) for (let k = 0; k < paragraph.starts.length; k++) (scanStarts ?? missing()).push(paragraph.starts[k] ?? missing())
+  if (paragraph !== null && (scanStarts ?? missing()).length === 0) for (let k = 0; k < paragraph.starts.length; k++) (scanStarts ?? missing()).push(paragraph.starts[k]!)
   let normalized = preserve ? normalizeWhitespacePreWrap(text) : collapseWhitespaceNormal(source)
   const keepAll = wordBreak === 'keep-all'
   let breaks: Uint8Array
@@ -512,10 +501,10 @@ export function analyzeText(
       if (!preserve && source !== normalized && /\r(?!\n)/.test(source)) {
         let count = 0
         for (let i = 0; i < source.length; i++) {
-          if (source.charCodeAt(i) !== 0x0D || source.charCodeAt(i + 1) === 0x0A) sourceBreaks[count++] = sourceBreaks[i] ?? missing()
-          else sourceBreaks[i + 1] = (sourceBreaks[i + 1] ?? missing()) | (sourceBreaks[i] ?? missing())
+          if (source.charCodeAt(i) !== 0x0D || source.charCodeAt(i + 1) === 0x0A) sourceBreaks[count++] = sourceBreaks[i]!
+          else sourceBreaks[i + 1] = sourceBreaks[i + 1]! | sourceBreaks[i]!
         }
-        sourceBreaks[count] = sourceBreaks[source.length] ?? missing()
+        sourceBreaks[count] = sourceBreaks[source.length]!
         source = source.replace(/\r(?!\n)/g, '')
         normalized = collapseWhitespaceNormal(source)
       }
@@ -583,12 +572,11 @@ export function analyzeText(
             copied = i + 1
             continue
           }
-          const breakBefore = sourceBreaks[i]
-          if (breakBefore === undefined) throw new RangeError('missing value')
+          const breakBefore = sourceBreaks[i]!
           sourceBreaks[count++] = last >= 0 && last < i - 1 && (breakBefore & BREAK) !== 0 && source.charCodeAt(last) === 0x00AD ? breakBefore | SOFT_HYPHEN_BREAK : breakBefore
           last = i
         }
-        sourceBreaks[count] = sourceBreaks[source.length] ?? missing()
+        sourceBreaks[count] = sourceBreaks[source.length]!
         source = kept + source.slice(copied)
         normalized = collapseWhitespaceNormal(source)
       }
@@ -612,9 +600,8 @@ function removeItemsSkippableSegmentBreaks(text: string, starts: number[], profi
   let copied = 0
   let newline = text.indexOf('\n')
   for (let k = 0; k < starts.length; k++) {
-    const start = starts[k]
-    if (start === undefined) throw new RangeError('missing value')
-    const end = k + 1 < starts.length ? (starts[k + 1] ?? missing()) : text.length
+    const start = starts[k]!
+    const end = k + 1 < starts.length ? starts[k + 1]! : text.length
     resultStarts.push(result.length + start - copied)
     if (newline < 0 || newline >= end) continue
     const item = text.slice(start, end)
@@ -676,7 +663,7 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
   const offsets = paragraph.sourceOffsets = alignToSource(text, normalized, scan)
   const { starts, atomic } = paragraph
   for (let k = 0, j = 0; k < starts.length; k++) {
-    while (j < normalized.length && (offsets[j] ?? missing()) < (starts[k] ?? missing())) j++
+    while (j < normalized.length && (offsets[j] ?? missing()) < starts[k]!) j++
     if (j === normalized.length) break
     breaks[j] = (breaks[j] ?? missing()) | ITEM_START
     if (atomic[k] && offsets[j] === starts[k]) {
@@ -699,14 +686,14 @@ function markItemStarts(text: string, normalized: string, breaks: Uint8Array, pa
 // atomic item as one U+FFFC, which is never scanned (removeItemsSkippableSegmentBreaks leaves
 // WebKit's text alone), so a scan takes an item's own text and nothing is cut out of the source
 // before the scans.
+/** @ensures result.length === source.length + 1 */
 function getWebKitParagraphBreaks(source: string, paragraph: ParagraphItems, preserve: boolean, keepAll: boolean, language: string | null): Uint8Array {
   const { items, starts, atomic } = paragraph
   const breaks = new Uint8Array(source.length + 1)
   let previous = -1
   for (let k = 0; k < starts.length; k++) {
-    const start = starts[k]
-    if (start === undefined) throw new RangeError('missing value')
-    const end = k + 1 < starts.length ? (starts[k + 1] ?? missing()) : source.length
+    const start = starts[k]!
+    const end = k + 1 < starts.length ? starts[k + 1]! : source.length
     if (start === end) continue
     // An item of one unit, as a space between two styled words or an atomic item's U+FFFC, has
     // no break inside, and its scan marks its end only after a line or paragraph separator
