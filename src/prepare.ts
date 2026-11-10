@@ -497,7 +497,7 @@ export function measureAnalysis(
             // a forced break are a Blink item of their own (inline_items_builder.cc:988-1034),
             // which kerns with nothing.
             if (spaceBefore && kerning.before !== 0 &&
-              !(((flags[mi - 1] ?? missing()) & KIND_BITS) === PRESERVED_SPACE && (mi === from + 1 || ((flags[mi - 2] ?? missing()) & KIND_BITS) === HARD_BREAK)) &&
+              !((flags[mi - 1]! & KIND_BITS) === PRESERVED_SPACE && (mi === from + 1 || (flags[mi - 2]! & KIND_BITS) === HARD_BREAK)) &&
               spaceSharesScriptRun(scriptRuns, own, starts[mi]! - ownStart, starts[mi]! - ownStart + text.length)) {
               const idx = at - 1
               const widthsValue = (widths[idx] ?? missing()) + kerning.before
