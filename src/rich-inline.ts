@@ -1346,10 +1346,14 @@ export function materializeRichInlineLineRange(
   }
 }
 
+// Contract on callers, assumed and not checked outside pretext: onLine changes no
+// typed array and shortens no array; it may change any value and grow any array.
+// Its type states this as Modifies<{ values: "any"; spines: "grow" }, void>, which
+// TypeScript reads as void.
 export function walkRichInlineLineRanges(
   prepared: PreparedRichInline,
   maxWidth: number,
-  onLine: (line: RichInlineLineRange) => void,
+  onLine: (line: RichInlineLineRange) => Modifies<{ values: "any"; spines: "grow" }, void>,
 ): number {
   const flow = getInternalPreparedRichInline(prepared)
   const safeWidth = Math.max(0, normalizeMaxWidth(maxWidth))

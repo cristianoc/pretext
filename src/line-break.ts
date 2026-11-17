@@ -119,7 +119,7 @@ type InternalLineVisitor = (
   startGraphemeIndex: number,
   endSegmentIndex: number,
   endGraphemeIndex: number,
-) => void
+) => Modifies<{ values: "any"; spines: "grow" }, void>
 
 function breaksAfterKind(kind: number): boolean {
   return (1 << kind & BREAK_AFTER_KINDS) !== 0

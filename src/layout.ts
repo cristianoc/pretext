@@ -231,10 +231,14 @@ export function materializeLineRange(
 // It, measureLineStats(), measureNaturalWidth() and layoutNextLineRange() return
 // widths and cursors and no text, from the line-break data layout() reads, so they
 // take a prepare() handle as well (RESEARCH.md, Decisions Log, 2026-10-06).
+// Contract on callers, assumed and not checked outside pretext: onLine changes no
+// typed array and shortens no array; it may change any value and grow any array.
+// Its type states this as Modifies<{ values: "any"; spines: "grow" }, void>, which
+// TypeScript reads as void.
 export function walkLineRanges(
   prepared: PreparedText,
   maxWidth: number,
-  onLine: (line: LayoutLineRange) => void,
+  onLine: (line: LayoutLineRange) => Modifies<{ values: "any"; spines: "grow" }, void>,
 ): number {
   return walkPreparedLinesRaw(
     getInternalPrepared(prepared),
