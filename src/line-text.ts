@@ -34,6 +34,8 @@ export function getGraphemeEnds(prepared: PreparedSegments, segmentIndex: number
 export function getGraphemeStart(prepared: PreparedSegments, segmentIndex: number, graphemeIndex: number): number {
   if (graphemeIndex <= 0) return 0
   const ends = getGraphemeEnds(prepared, segmentIndex)
+  // bounds bug: upstream reads ends[graphemeIndex - 1]!, which is undefined, returned as a
+  // number, where a range kept from a longer text starts past the segment's last grapheme.
   const end = ends[graphemeIndex - 1] ?? 0
   return end === 0 ? ends.length : end
 }
