@@ -168,8 +168,8 @@ export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProf
 /** @requires 0 <= from
  * @ensures safeInteger(result) && 0 <= result && result <= text.length */
 function getTrailingCollapsibleStart(text: string, from: SafeInt, profile: AnalysisProfile): number {
-  let start = text.length
-  /** @invariant safeInteger(start) && 0 <= start && start <= text.length */
+  let start: SafeInt = text.length
+  /** @invariant 0 <= start && start <= text.length */
   for (let i = text.length - 1; i >= from; i--) {
     const code = text.charCodeAt(i)
     if (isCollapsibleSpaceCode(code)) start = i
@@ -349,8 +349,8 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // Where the last run of what the text run drops, handled at its start, ends.
   let droppedEnd = -1
   // The last segment's kind, -1 before the first unit, which starts one.
-  let lastKind = -1
-  /** @invariant starts.length === flags.length && safeInteger(lastKind) && lastKind < 16 * flags.length */
+  let lastKind: SafeInt = -1
+  /** @invariant starts.length === flags.length && lastKind < 16 * flags.length */
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i)
     if (dropsBidiControl && i < droppedEnd) continue
@@ -419,9 +419,9 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // between the two, and none goes back to a break from it. A soft hyphen that is a
   // zero-width break (classifySegmentUnit) is left as it was.
   let hasUnbroken = false
-  const count = flags.length
-  /** @invariant safeInteger(j) && safeInteger(count) && j + 2 <= count && count === flags.length */
-  for (let j = count - 2; j >= 0; j--) {
+  const count: SafeInt = flags.length
+  /** @invariant j + 2 <= count && count === flags.length */
+  for (let j: SafeInt = count - 2; j >= 0; j--) {
     const kind = flags[j]! & KIND_BITS
     const next = flags[j + 1]! & KIND_BITS
     if (((breaks[(starts[j + 1] ?? missing())] ?? missing()) & BREAK) !== 0 || kind === HARD_BREAK) continue
@@ -441,8 +441,8 @@ function segmentAtLineBreaks(normalized: string, spaceSources: Uint16Array | nul
   // where measurement reads it, Firefox's rich-inline preparation ran 11-19% slower (RESEARCH.md,
   // Keeping Work Bounded).
   const texts: string[] = []
-  /** @invariant safeInteger(j) && safeInteger(count) && texts.length === j && count === flags.length && starts.length === flags.length */
-  for (let j = 0; j < count; j++) texts.push(normalized.slice(starts[j], j + 1 < count ? starts[j + 1] : normalized.length))
+  /** @invariant texts.length === j && count === flags.length && starts.length === flags.length */
+  for (let j: SafeInt = 0; j < count; j++) texts.push(normalized.slice(starts[j], j + 1 < count ? starts[j + 1] : normalized.length))
   return { normalized, spaceSources, texts, starts, flags, hasUnbroken }
 }
 

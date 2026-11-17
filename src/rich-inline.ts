@@ -280,7 +280,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const analysis = analyzeText(source, profile, whiteSpace, wordBreak, language, paragraph)
   const offsets = paragraph.sourceOffsets
   if (offsets === undefined || offsets === null) throw new RangeError('missing value')
-  const count = analysis.flags.length
+  const count: SafeInt = analysis.flags.length
 
   // The paragraph's lists, which each item's measurement adds its segments to (measureAnalysis).
   const widths: number[] = []
@@ -328,8 +328,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // Whether the paragraph holds an object of width 0.
   let hasEmptyObject = false
 
-  /** @invariant safeInteger(from) && safeInteger(count) && 0 <= from */
-  for (let from = 0; from < count;) {
+  /** @invariant 0 <= from */
+  for (let from: SafeInt = 0; from < count;) {
     // The item this segment starts in, and the segments that start in it.
     const offset = offsets[(analysis.starts[from] ?? missing())]
     if (offset === undefined) throw new RangeError('missing value')
@@ -337,8 +337,8 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     while (index + 1 < starts.length && (starts[index + 1] ?? missing()) <= offset) index++
     while (itemSegments.length <= index) itemSegments.push(widths.length)
     const itemEnd = index + 1 < starts.length ? (starts[index + 1] ?? missing()) : source.length
-    let to = from + 1
-    /** @invariant safeInteger(from) && safeInteger(to) && safeInteger(count) && 0 <= from && from < to && to <= count */
+    let to: SafeInt = from + 1
+    /** @invariant 0 <= from && from < to && to <= count */
     while (to < count && (offsets[(analysis.starts[to] ?? missing())] ?? missing()) < itemEnd) to++
     const item = items[index]
     if (item === undefined) throw new RangeError('missing value')
