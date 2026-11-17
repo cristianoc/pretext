@@ -165,9 +165,9 @@ export function removeSkippableSegmentBreaks(text: string, profile: AnalysisProf
 // run reads through the bidi controls in it and after it (TransformText, nsTextFrameUtils.cpp:
 // 319-345), so there it is the first white space after the last character that is neither, and
 // the controls stay.
-/** @requires safeInteger(from) && 0 <= from
+/** @requires 0 <= from
  * @ensures safeInteger(result) && 0 <= result && result <= text.length */
-function getTrailingCollapsibleStart(text: string, from: number, profile: AnalysisProfile): number {
+function getTrailingCollapsibleStart(text: string, from: SafeInt, profile: AnalysisProfile): number {
   let start = text.length
   /** @invariant safeInteger(start) && 0 <= start && start <= text.length */
   for (let i = text.length - 1; i >= from; i--) {
@@ -205,7 +205,7 @@ function normalizeWhitespacePreWrap(text: string): string {
 
 const combiningMarkRe = /\p{M}/u
 
-/** @ensures safeInteger(result) && result >= 0 && result <= 15 */
+/** @ensures result >= 0 && result <= 15 */
 function classifySegmentBreakCode(code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if (whiteSpace === 'pre-wrap') {
     if (code === 0x20) return PRESERVED_SPACE
@@ -282,7 +282,7 @@ function mapSourceLineBreaks(source: string, normalizedLength: number, sourceBre
 // without a hyphen, and Firefox, which drops soft hyphens from its text runs, has nothing there
 // (DROPPED). One with only soft hyphens before it on its chunk stays a soft hyphen: no line ends
 // at a chunk's start, and a line's start leaves either out.
-/** @ensures safeInteger(result) && result >= 0 && result <= 15 */
+/** @ensures result >= 0 && result <= 15 */
 function classifySegmentUnit(normalized: string, breaks: Uint8Array, i: number, code: number, whiteSpace: WhiteSpaceMode, scan: AnalysisProfile['lineBreakScan']): SegmentKindCode {
   if ((code === 0x2028 || code === 0x2029) && ((breaks[i + 1] ?? missing()) & FORCED_BREAK) !== 0) return HARD_BREAK
   if (code === 0x00AD && ((breaks[i + 1] ?? missing()) & SOFT_HYPHEN_BREAK) !== 0 && followsChunkContent(normalized, i)) return ZERO_WIDTH_BREAK
