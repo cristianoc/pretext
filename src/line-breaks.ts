@@ -783,8 +783,7 @@ export function getWebKitLineRules(language: string | null): WebKitLineRules {
   const subtags = locale.split(/[-_]/)
   let name = (subtags[0] ?? missing()).toLowerCase()
   for (let k = 1; k < subtags.length; k++) {
-    const subtag = subtags[k]
-    if (subtag === undefined) throw new RangeError('missing value')
+    const subtag = subtags[k]!
     name += '_' + (subtag.length === 4 ? (subtag[0] ?? missing()).toUpperCase() + subtag.slice(1).toLowerCase() : subtag.toUpperCase())
   }
   let remap = appleQuoteRemapTable.get(name)
@@ -796,7 +795,7 @@ export function getWebKitLineRules(language: string | null): WebKitLineRules {
   const chars: number[] = []
   const categories: number[] = []
   for (let k = 0; k < remap.length; k += 2) {
-    chars.push(remap[k] ?? missing())
+    chars.push(remap[k]!)
     categories.push(getClass(rules.classes, remap[k + 1] === 0 ? 0x7b : 0x7d))
   }
   line = { rules, overrides: { chars, categories } }
@@ -814,6 +813,7 @@ const SOFT_LINE_BREAK = 2
 // boundary that isn't next to a forced break. A U+2028 or U+2029 that starts an item
 // forces a break after it, marked FORCED_BREAK; one that ICU's fast-forward passed stays
 // inside a text item and doesn't.
+/** @ensures result.length === source.length + 1 */
 export function getWebKitLineBreaks(
   source: string,
   preserveNewlines: boolean,

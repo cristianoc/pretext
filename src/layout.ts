@@ -139,7 +139,7 @@ export function prepareWithSegments(text: string, font: string, options?: Prepar
   const prepared = prepareInternal(text, font, segments, options)
   // Each segment's kind by name, from its flags.
   const kinds: SegmentBreakKind[] = []
-  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[(prepared.segmentFlags[i] ?? missing()) & KIND_BITS] ?? missing())
+  for (let i = 0; i < prepared.segmentFlags.length; i++) kinds.push(SEGMENT_KINDS[prepared.segmentFlags[i]! & KIND_BITS] ?? missing())
   return { ...prepared, segments, kinds }
 }
 
@@ -231,10 +231,13 @@ export function materializeLineRange(
 // It, measureLineStats(), measureNaturalWidth() and layoutNextLineRange() return
 // widths and cursors and no text, from the line-break data layout() reads, so they
 // take a prepare() handle as well (RESEARCH.md, Decisions Log, 2026-10-06).
+// contract on callers: onLine changes no typed array and shortens no array; it may change
+// any value and grow any array. Assumed, not checked outside pretext. Its type states it as
+// Modifies<{ values: "any"; spines: "grow" }, void>, which TypeScript reads as void.
 export function walkLineRanges(
   prepared: PreparedText,
   maxWidth: number,
-  onLine: (line: LayoutLineRange) => void,
+  onLine: (line: LayoutLineRange) => Modifies<{ values: "any"; spines: "grow" }, void>,
 ): number {
   return walkPreparedLinesRaw(
     getInternalPrepared(prepared),
