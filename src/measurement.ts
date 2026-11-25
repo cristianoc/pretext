@@ -1351,7 +1351,7 @@ function measureFitAdvances(
   measurement: FontMeasurement,
   emojiCorrection: number,
   followingSpaceWidth: number | null,
-): number[] {
+): Modifies<{ values: "any"; spines: "grow" }, number[]> {
   const prefixes = from === 'segment-prefixes'
   const pairs = from === 'pair-context'
   const advances: number[] = []
