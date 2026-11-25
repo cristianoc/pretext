@@ -450,6 +450,7 @@ export function measureAnalysis(
   // filled; Decisions Log, 2026-10-09, a paragraph's lists).
   /**
    * @invariant safeInteger(mi) && safeInteger(from) && safeInteger(to) && from <= mi && to <= flags.length && to <= starts.length && to <= texts.length && flags !== scriptRuns.openBrackets && starts !== scriptRuns.openBrackets && texts !== scriptRuns.openBrackets
+   * @invariant breakableLineStartExtras === null || breakableLineStartExtras.length === mi - from
    * @invariant unspacedRuns === null || flags !== unspacedRuns.openBrackets && starts !== unspacedRuns.openBrackets && texts !== unspacedRuns.openBrackets
    */
   for (let mi = from, at = base; mi < to; mi++, at++) {
@@ -459,6 +460,7 @@ export function measureAnalysis(
     let width = 0
     // Graphemes that take letter spacing after them.
     let spacingGraphemeCount = 0
+    let fitStartExtras: number[] | null = null
     let fitAdvances: number[] | null = null
     switch (kind) {
       case TEXT: {
@@ -539,13 +541,12 @@ export function measureAnalysis(
         fitAdvances = fit.advances
         if (fitAdvances === null) break
         // A difference from the advance, so it holds whatever the advances take below.
-        const startExtras = fit.lineStartExtras
-        if (startExtras !== null) {
-          breakableLineStartExtras ??= new Array<number[] | null>(to - from).fill(null)
+        fitStartExtras = fit.lineStartExtras
+        if (fitStartExtras !== null) {
           const idx = mi - from
-          const breakableLineStartExtrasStore = breakableLineStartExtras
-          if ((idx & 0x7fffffff) !== idx || idx > breakableLineStartExtrasStore.length) throw new RangeError('index')
-          breakableLineStartExtrasStore[idx] = startExtras
+          if ((idx & 0x7fffffff) !== idx) throw new RangeError('index')
+          // Backfill the measured segments when the first extra is needed.
+          breakableLineStartExtras ??= new Array<number[] | null>(idx).fill(null)
         }
         // The cached advances are shared by every occurrence of this text; only
         // the final grapheme touches the following space.
@@ -616,6 +617,9 @@ export function measureAnalysis(
     widths[atIndex] = widthsValue
     if ((atIndex & 0x7fffffff) !== atIndex || atIndex > breakableFitAdvances.length) throw new RangeError('index')
     breakableFitAdvances[atIndex] = fitAdvances
+    if (breakableLineStartExtras !== null) {
+      breakableLineStartExtras[breakableLineStartExtras.length] = fitStartExtras
+    }
     if (segments !== null) {
       const idx = mi - from
       if ((idx & 0x7fffffff) !== idx || idx > segments.length) throw new RangeError('index')
