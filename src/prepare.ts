@@ -268,11 +268,12 @@ function getUnspacedGraphemes(text: string, start: number, end: number, grapheme
 }
 
 // The lists of a rich-inline paragraph's handle that each item's measurement adds its segments
-// to; `segmentFlags` has room for them from `widths.length` on.
+// to. The flags and the optional line-start extras have room for all its segments.
 export type ParagraphLists = {
   widths: number[]
   segmentFlags: Uint8Array
   breakableFitAdvances: (number[] | null)[]
+  breakableLineStartExtras: (number[] | null)[] | null
 }
 
 // The functions from here to measureAnalysis() are its loop's. They are given what they read
@@ -349,11 +350,9 @@ function getTextSegmentWidth(text: string, textMetrics: SegmentMetrics, measurem
 // Measures segments [from, to) of an analysis in a font, alone: all of a text's, or those of one
 // item of a rich-inline paragraph (RESEARCH.md, Rich Inline As One Paragraph), where only the
 // marks Blink halts and a run of U+3000 read the text around the item (getHanKerningTrims,
-// addIdeographicSpaceHangs). Each segment's width, flags byte and advances go on the end of
-// three lists: a text's own, or for an item its paragraph's, so an item is measured with no
-// copy of its part of the analysis and no lists of its own to copy from. The handle returned
-// holds those lists; what else it holds is the measured segments' alone, each list from the
-// first of them.
+// addIdeographicSpaceHangs). A segment's width, flags, fit advances and line-start advance
+// extras use the same index in the text's or paragraph's lists. The other lists in the
+// result start at the first measured segment.
 /** @requires safeInteger(from) && 0 <= from && from <= to && safeInteger(to) && to <= analysis.flags.length && to <= analysis.starts.length && to <= analysis.texts.length */
 export function measureAnalysis(
   analysis: TextAnalysis,
@@ -433,14 +432,14 @@ export function measureAnalysis(
   // the scan breaks at every segment boundary, and layout() counts it with the
   // simple stepper where it doesn't (countPreparedLines).
   let simpleKinds = !hasLetterSpacing
-  let breakableLineStartExtras: (number[] | null)[] | null = null
+  let breakableLineStartExtras = paragraph?.breakableLineStartExtras ?? null
   let discretionaryHyphenContexts: number[] | null = null
   let previousJoinablePiece: string | null = null
   let previousJoinableMetrics: SegmentMetrics | null = null
   // WebKit's return from an unfit hyphen fits each side as measured alone (getJoinedNarrowing).
   const returnFitsEachSideAlone = engineProfile.unfitHyphenRetreat === 'full-width-or-first'
 
-  // Each segment is stored at its index: `at` in the text's or the paragraph's three lists,
+  // Each segment is stored at its index: `at` in the text's or the paragraph's lists,
   // `mi - from` in the lists of the measured segments alone. Stored and not pushed, for V8:
   // once it has deoptimized at a push onto a paragraph's list, it compiles that push as a call
   // from then on, for texts too. With stores Chrome 154 prepares plain text again 4-9% faster
@@ -450,7 +449,7 @@ export function measureAnalysis(
   // filled; Decisions Log, 2026-10-09, a paragraph's lists).
   /**
    * @invariant safeInteger(mi) && safeInteger(from) && safeInteger(to) && from <= mi && to <= flags.length && to <= starts.length && to <= texts.length && flags !== scriptRuns.openBrackets && starts !== scriptRuns.openBrackets && texts !== scriptRuns.openBrackets
-   * @invariant breakableLineStartExtras === null || breakableLineStartExtras.length === mi - from
+   * @invariant paragraph !== null || breakableLineStartExtras === null || breakableLineStartExtras.length === mi - from
    * @invariant unspacedRuns === null || flags !== unspacedRuns.openBrackets && starts !== unspacedRuns.openBrackets && texts !== unspacedRuns.openBrackets
    */
   for (let mi = from, at = base; mi < to; mi++, at++) {
@@ -542,7 +541,7 @@ export function measureAnalysis(
         if (fitAdvances === null) break
         // A difference from the advance, so it holds whatever the advances take below.
         fitStartExtras = fit.lineStartExtras
-        if (fitStartExtras !== null) {
+        if (fitStartExtras !== null && paragraph === null) {
           const idx = mi - from
           if ((idx & 0x7fffffff) !== idx) throw new RangeError('index')
           // Backfill the measured segments when the first extra is needed.
@@ -617,8 +616,17 @@ export function measureAnalysis(
     widths[atIndex] = widthsValue
     if ((atIndex & 0x7fffffff) !== atIndex || atIndex > breakableFitAdvances.length) throw new RangeError('index')
     breakableFitAdvances[atIndex] = fitAdvances
-    if (breakableLineStartExtras !== null) {
-      breakableLineStartExtras[breakableLineStartExtras.length] = fitStartExtras
+    if (paragraph === null) {
+      if (breakableLineStartExtras !== null) {
+        breakableLineStartExtras[breakableLineStartExtras.length] = fitStartExtras
+      }
+    } else if (fitStartExtras !== null) {
+      if (breakableLineStartExtras === null) {
+        breakableLineStartExtras = new Array<number[] | null>(segmentFlags.length).fill(null)
+        paragraph.breakableLineStartExtras = breakableLineStartExtras
+      }
+      if (atIndex >= breakableLineStartExtras.length) throw new RangeError('index')
+      breakableLineStartExtras[atIndex] = fitStartExtras
     }
     if (segments !== null) {
       const idx = mi - from
