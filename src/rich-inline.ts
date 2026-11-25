@@ -286,7 +286,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   const widths: number[] = []
   const flags = new Uint8Array(count + padded)
   const breakableFitAdvances: (number[] | null)[] = []
-  const lists: ParagraphLists = { widths, segmentFlags: flags, breakableFitAdvances }
+  const lists: ParagraphLists = { widths, segmentFlags: flags, breakableFitAdvances, breakableLineStartExtras: null }
   const segments: string[] = []
   const sourceStarts: number[] = []
   const sourceEnds: number[] = []
@@ -298,7 +298,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
   // Firefox 156 and Safari 27 prepare CJK styled paragraphs again up to 8% faster with the lists
   // made whole than with each filled by a call and a push a segment (RESEARCH.md, Keeping Work
   // Bounded, JavaScript Engines, under A paragraph's sparse lists made whole).
-  let breakableLineStartExtras: (number[] | null)[] | null = null
   let lineStartExtras: number[] | null = null
   let lineEndTrims: number[] | null = null
   let overflowLineEndTrims: number[] | null = null
@@ -565,15 +564,6 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
         if ((at & 0x7fffffff) !== at || at > sourceUnitsStore.length) throw new RangeError('index')
         sourceUnitsStore[at] = units
       }
-      const subStartExtras = sub.breakableLineStartExtras
-      if (subStartExtras !== null && subStartExtras[s] !== null) {
-        breakableLineStartExtras ??= new Array<number[] | null>(flags.length).fill(null)
-        const breakableLineStartExtrasStore = breakableLineStartExtras
-        const breakableLineStartExtrasValue = subStartExtras[s]
-        if (breakableLineStartExtrasValue === undefined) throw new RangeError('missing value')
-        if ((at & 0x7fffffff) !== at || at > breakableLineStartExtrasStore.length) throw new RangeError('index')
-        breakableLineStartExtrasStore[at] = breakableLineStartExtrasValue
-      }
       const startExtra = (sub.lineStartExtras === null ? 0 : (sub.lineStartExtras[s] ?? missing())) + (i > first ? extraWidth : 0)
       if (startExtra !== 0) {
         lineStartExtras ??= zeroList(flags.length)
@@ -717,7 +707,7 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
     letterSpacing: spacingsDiffer || sharedSpacing === null ? 0 : sharedSpacing,
     discretionaryHyphenWidth: firstTextItem < 0 ? 0 : (hyphenWidths[firstTextItem] ?? missing()),
     discretionaryHyphenContexts,
-    breakableLineStartExtras,
+    breakableLineStartExtras: lists.breakableLineStartExtras,
     lineStartExtras,
     lineEndTrims,
     overflowLineEndTrims,
