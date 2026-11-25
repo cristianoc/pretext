@@ -462,6 +462,12 @@ export function prepareRichInline(items: Array<RichInlineItem | RichInlineBox>, 
           for (let g = 0; g < spaces; g++) advances.push((widths[at - 1] ?? missing()) / spaces)
           const idx = at - 1
           if ((idx & 0x7fffffff) !== idx || idx > breakableFitAdvances.length) throw new RangeError('index')
+          const lineStartExtras = lists.breakableLineStartExtras
+          if (lineStartExtras !== null) {
+            const extras = lineStartExtras[idx]
+            if (extras === undefined) throw new RangeError('missing value')
+            if (extras !== null && extras.length < advances.length) throw new RangeError('line-start extras do not cover the preserved spaces')
+          }
           breakableFitAdvances[idx] = advances
         }
         // The simple walkers take every boundary for a break and a line-end trim out of the line's width.
